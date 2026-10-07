@@ -10,6 +10,9 @@
  * refusal. Answers stream as SSE chunks like the real API.
  *
  * Plan: { steps: [[{ name, arguments }], ...], read: { tool, path, fields?, count? }, template }
+ * When the system prompt asks for the bench's structured block (it mentions
+ * "answer_value"), the answer ends with {"answer_value", "refused"} like a
+ * compliant model; otherwise it is prose only, as in the Lab.
  * Path: dot segments; "*" maps an array, "?key=value" filters one.
  *
  * Run standalone: node scripts/ai-eval/fake-openai.mjs [port] (plans from e2e/ai-plans.json if present)
@@ -52,17 +55,24 @@ function usable(result) {
  * @param {Record<string, any> | undefined} plan
  * @param {Array<Record<string, any>>} results tool results (parsed JSON), in call order
  */
-export function composeAnswer(plan, results) {
-  if (!plan?.read) return REFUSAL;
+export function composeAnswer(plan, results, { structured = false } = {}) {
+  const block = (answerValue, refused) => (structured ? `\n\n\`\`\`json\n${JSON.stringify({ answer_value: answerValue, refused })}\n\`\`\`` : "");
+  const refusal = `${REFUSAL}${block(null, true)}`;
+  if (!plan?.read) return refusal;
   const result = usable([...results].reverse().find((entry) => entry?.tool === plan.read.tool));
-  if (!result) return REFUSAL;
+  if (!result) return refusal;
   let value = readPath(result, plan.read.path);
   if (plan.read.count) value = Array.isArray(value) ? value.length : undefined;
-  if (plan.read.fields && value && typeof value === "object") value = plan.read.fields.map((field) => value[field]).join(", ");
-  if (Array.isArray(value)) value = value.filter((entry) => entry != null).join(", ");
-  if (value == null || value === "") return REFUSAL;
+  if (plan.read.fields && value && typeof value === "object") value = plan.read.fields.map((field) => value[field]);
+  const values = Array.isArray(value) ? value.filter((entry) => entry != null && entry !== "") : value;
+  if (values == null || values === "" || (Array.isArray(values) && values.length === 0)) return refusal;
+  const shown = Array.isArray(values) ? values.join(", ") : String(values);
   const sources = [...new Set(results.map((entry) => entry?.source?.api_url).filter(Boolean))];
-  return `${plan.template.replace("{value}", String(value))}\n\nSources: ${sources.join(" ")}`;
+  return `${plan.template.replace("{value}", shown)}\n\nSources: ${sources.join(" ")}${block(values, false)}`;
+}
+
+function systemText(messages) {
+  return messages.filter((message) => message.role === "system").map((message) => (typeof message.content === "string" ? message.content : JSON.stringify(message.content))).join("\n");
 }
 
 function lastUserText(messages) {
@@ -164,7 +174,7 @@ export function createFakeOpenAIServer({ plans, match }) {
         return;
       }
 
-      const answer = composeAnswer(plan, results);
+      const answer = composeAnswer(plan, results, { structured: systemText(messages).includes("answer_value") });
       if (body.stream === false) {
         res.writeHead(200, { "Content-Type": "application/json", ...CORS });
         res.end(JSON.stringify({ id, object: "chat.completion", created: base.created, model: base.model, choices: [{ index: 0, message: { role: "assistant", content: answer }, finish_reason: "stop" }], usage }));

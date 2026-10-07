@@ -1842,7 +1842,7 @@ export default function LabPageClient({
               <p className="section-index mb-4">HOW AI MODE WORKS</p>
               <ul className="space-y-3">
                 <li>Your key stays in this browser. Requests go straight from this page to the provider you choose, never through The Data Driver.</li>
-                <li>The key is kept for this tab only unless you tick &ldquo;Remember on this device&rdquo;. &ldquo;Forget key&rdquo; removes it.</li>
+                <li>The key is kept for this tab only unless you tick &ldquo;Remember on this device&rdquo;. &ldquo;Forget key&rdquo; stops a running question and removes it.</li>
                 <li>The model can only read the public API through read-only tools. Each answer lists the tool calls and the sources it read; OpenF1 data is non-official enrichment (CC BY-NC-SA 4.0).</li>
                 <li>Models can still make mistakes: check the sources. The grounded mode stays the default.</li>
               </ul>

@@ -10,15 +10,17 @@ import {
   F1_TOOLS,
   fitResult,
   MAX_RESULT_CHARS,
+  MAX_TEXT_CHARS,
+  TEXT_TRUNCATION_MARK,
   toolJsonSchemas,
 } from "../../src/lib/f1-tools/catalogue.mjs";
 import { matchDrivers, matchRaces } from "../../src/lib/f1-tools/resolve.mjs";
 import { isAllowedProxyPath } from "../../src/lib/proxy-allowlist.mjs";
-import { checkSettings, PROVIDER_CONNECT_ORIGINS, PROVIDERS, validateBaseURL } from "../../src/lib/ai-byok/providers.mjs";
+import { aiConnectOrigins, checkSettings, normaliseHost, parseConnectOrigins, PROVIDER_CONNECT_ORIGINS, PROVIDERS, validateBaseURL } from "../../src/lib/ai-byok/providers.mjs";
 import { forgetSettings, loadSettings, saveSettings, STORAGE_KEY } from "../../src/lib/ai-byok/key-store.mjs";
 import { buildSystemPrompt, collectSources, createAiTools } from "../../src/lib/ai-byok/agent.mjs";
 import { composeAnswer, readPath, REFUSAL } from "./fake-openai.mjs";
-import { containsValue, gradeAnswer, isRefusal, summarise } from "./grade.mjs";
+import { containsValue, extractStructured, gradeAnswer, isRefusal, STRUCTURED_ANSWER_RULE, summarise, valueMatches, valueStance } from "./grade.mjs";
 
 const snapshot = JSON.parse(readFileSync(new URL("./api-snapshot.json", import.meta.url), "utf8")).responses;
 const truth = JSON.parse(readFileSync(new URL("./truth.json", import.meta.url), "utf8"));
@@ -168,6 +170,54 @@ test("catalogue: outputs are bounded (row limits, lap window, character cap)", a
   assert.equal(fitted.truncated.total, 400);
 });
 
+// Review finding 4: the cap applies to the serialised result, one long text included.
+test("catalogue: one long text field cannot exceed the cap", async () => {
+  const runner = runnerFor({ "/v1/f1/races/2026/17/incidents": ok([{ type: "dnf", lap: 3, driver: "A B", description: "x".repeat(12_000) }], { source: "openf1" }) });
+  const result = await runner.call("f1_incidents", { season: 2026, api_round: 17 });
+  assert.ok(JSON.stringify(result).length <= MAX_RESULT_CHARS, `${JSON.stringify(result).length} characters`);
+  const description = result.data.incidents[0].description;
+  assert.ok(description.endsWith(TEXT_TRUNCATION_MARK));
+  assert.ok(description.length <= MAX_TEXT_CHARS);
+  assert.equal(result.truncated.text_fields, 1);
+  assert.ok(result.truncated.original_chars > 12_000);
+  assert.equal(result.source.licence, "CC BY-NC-SA 4.0", "provenance survives bounding");
+
+  const many = Array.from({ length: 60 }, (_, index) => ({ type: "flag", lap: index, driver: "A B", description: "y".repeat(2_000) }));
+  const bounded = await runnerFor({ "/v1/f1/races/2026/17/incidents": ok(many, { source: "openf1" }) }).call("f1_incidents", { season: 2026, api_round: 17, limit: 60 });
+  assert.ok(JSON.stringify(bounded).length <= MAX_RESULT_CHARS);
+  assert.equal(bounded.truncated.total, 60);
+  assert.ok(bounded.truncated.shown < 60);
+
+  const error = await runnerFor({ "/v1/f1/calendar/2026": { status: 502, body: { status: "error", error: { message: "z".repeat(20_000) } } } }).call("f1_calendar", { season: 2026 });
+  assert.equal(error.ok, false);
+  assert.ok(JSON.stringify(error).length <= MAX_RESULT_CHARS);
+  assert.ok(error.error.message.endsWith(TEXT_TRUNCATION_MARK));
+
+  const wide = { tool: "x", ok: true, data: { one: Object.fromEntries(Array.from({ length: 500 }, (_, index) => [`k${index}`, `value ${index}`])) } };
+  const squeezed = fitResult(wide, 1_000);
+  assert.ok(JSON.stringify(squeezed).length <= 1_000);
+  assert.equal(squeezed.data, null);
+  assert.ok(squeezed.truncated.original_chars > 1_000);
+
+  const small = { tool: "x", ok: true, data: { rows: [1, 2] } };
+  assert.equal(fitResult(small), small, "a small result is returned untouched");
+});
+
+// Review finding 5: no silent list cut.
+test("catalogue: safety cars and datasets report a cut list", async () => {
+  const periods = Array.from({ length: 21 }, (_, index) => ({ type: "SC", start_lap: index + 1, end_lap: index + 2 }));
+  const safety = await runnerFor({ "/v1/f1/races/2026/17/safety-cars": ok(periods, { source: "openf1" }) }).call("f1_safety_cars", { season: 2026, api_round: 17 });
+  assert.equal(safety.data.periods.length, 20);
+  assert.equal(safety.data.period_count, 21);
+  assert.deepEqual(safety.truncated, { shown: 20, total: 21 });
+  const datasets = Array.from({ length: 25 }, (_, index) => ({ dataset: `d${index}`, status: "ready" }));
+  const status = await runnerFor({ "/v1/f1/races/2026/17/ingestion-readiness": ok({ ready: true, status: "ready", datasets }) }).call("f1_race_data_status", { season: 2026, api_round: 17 });
+  assert.equal(status.data.datasets.length, 20);
+  assert.deepEqual(status.truncated, { shown: 20, total: 25 });
+  const few = await runnerFor({ "/v1/f1/races/2026/17/safety-cars": ok(periods.slice(0, 2), { source: "openf1" }) }).call("f1_safety_cars", { season: 2026, api_round: 17 });
+  assert.equal(few.truncated, undefined);
+});
+
 test("catalogue: the browser fetcher calls only the same-origin proxy, with no credentials", async () => {
   const seen = [];
   const original = globalThis.fetch;
@@ -228,6 +278,79 @@ test("providers: base URLs that could send the key to The Data Driver are refuse
     "not a url",
   ]) assert.equal(validateBaseURL(bad).ok, false, bad);
   assert.equal(validateBaseURL("https://preview.example.app/v1", { pageOrigin: "https://preview.example.app" }).ok, false);
+});
+
+// Review finding 1: every spelling of a TDD host, and this machine under
+// another name, must be refused before any request.
+const BYPASSES = [
+  "https://API.THEDATADRIVER.APP./v1",
+  "https://api.thedatadriver.app./v1",
+  "https://thedatadriver.app./v1",
+  "https://thedatadriver.app../v1",
+  "https://api%2ethedatadriver%2eapp/v1",
+  "https://api.thedatadriver%2Eapp/v1",
+  "https://api.thedatadriver\u3002app/v1",
+  "https://api.thedatadriver\uff0eapp/v1",
+  "https://\uff41\uff50\uff49.thedatadriver.app/v1",
+  "https://ThEdAtAdRiVeR.aPp/v1",
+  "https://api.thedatadriver.app:443/v1",
+  "https://api.thedatadriver.app:8443/v1",
+  "https://deep.sub.api.thedatadriver.app/v1",
+  "https://user@api.thedatadriver.app/v1",
+  "https://user:pw@llm.example.org@api.thedatadriver.app/v1",
+  "https://thedatadriver.com/v1",
+  "https://api.thedatadriver.com./v1",
+  "https://203.0.113.10/v1",
+  "https://[2001:db8::1]/v1",
+  "http://example.org/v1",
+  "http://localhost.evil.example/v1",
+];
+
+for (const url of BYPASSES) {
+  test(`providers: refuses ${url}`, () => {
+    assert.equal(validateBaseURL(url).ok, false, url);
+    assert.equal(validateBaseURL(url, { pageOrigin: "https://thedatadriver.app" }).ok, false, url);
+  });
+}
+
+for (const [url, pageOrigin] of [
+  ["http://127.0.0.1:3000/v1", "http://localhost:3000"],
+  ["http://localhost:3000/v1", "http://127.0.0.1:3000"],
+  ["http://LOCALHOST.:3000/v1", "http://localhost:3000"],
+  ["http://[::1]:3000/v1", "http://localhost:3000"],
+  ["http://127.1:3000/v1", "http://localhost:3000"],
+  ["http://0x7f.0.0.1:3000/v1", "http://localhost:3000"],
+  ["https://PREVIEW.example.app./v1", "https://preview.example.app"],
+  ["https://preview.example.app:8443/v1", "https://preview.example.app"],
+]) {
+  test(`providers: refuses ${url} from a page on ${pageOrigin}`, () => {
+    assert.equal(validateBaseURL(url, { pageOrigin }).ok, false);
+  });
+}
+
+test("providers: host normalisation and allowed local endpoints", () => {
+  assert.equal(normaliseHost("API.THEDATADRIVER.APP."), "api.thedatadriver.app");
+  assert.equal(normaliseHost("api%2ethedatadriver%2eapp"), "api.thedatadriver.app");
+  assert.equal(normaliseHost("api.thedatadriver\u3002app"), "api.thedatadriver.app");
+  assert.equal(normaliseHost("b\u00fccher.example"), "xn--bcher-kva.example");
+  assert.equal(validateBaseURL("http://localhost:11434/v1", { pageOrigin: "http://localhost:3000" }).ok, true, "Ollama next to a local Lab");
+  assert.equal(validateBaseURL("https://llm.example.org./v1").ok, true, "a trailing dot alone is not a TDD host");
+  assert.equal(validateBaseURL("https://thedatadriver.app.example.org/v1").ok, true, "a lookalike under another domain is not TDD");
+});
+
+test("providers: the CSP connect list and the settings check agree", () => {
+  assert.deepEqual(aiConnectOrigins(""), PROVIDER_CONNECT_ORIGINS);
+  assert.deepEqual(parseConnectOrigins(" https://llm.example.org/v1  http://127.0.0.1:8080 "), ["https://llm.example.org", "http://127.0.0.1:8080"]);
+  for (const bad of ["http://llm.example.org", "https://api.thedatadriver.app.", "https://u:p@llm.example.org", "nope"]) {
+    assert.throws(() => parseConnectOrigins(bad), /NEXT_PUBLIC_TDD_AI_CONNECT_SRC/, bad);
+  }
+  const allowedOrigins = aiConnectOrigins("https://llm.example.org");
+  assert.equal(checkSettings({ provider: "custom", model: "m", baseURL: "https://llm.example.org/v1" }, { allowedOrigins }).ok, true);
+  const outside = checkSettings({ provider: "custom", model: "m", baseURL: "https://other.example.org/v1" }, { allowedOrigins });
+  assert.equal(outside.ok, false);
+  assert.match(outside.error, /open-source Data Lab/);
+  assert.equal(checkSettings({ provider: "ollama", model: "qwen3" }, { allowedOrigins }).ok, true);
+  assert.equal(checkSettings({ provider: "ollama", model: "qwen3", baseURL: "http://localhost:8080/v1" }, { allowedOrigins }).ok, false);
 });
 
 test("providers: settings need a model, and a key for hosted providers", () => {
@@ -317,6 +440,10 @@ test("fake model: reads values from tool results and refuses when they are missi
   assert.equal(composeAnswer(plan, [{ ...result, availability: "unavailable" }]), REFUSAL);
   assert.equal(composeAnswer(undefined, []), REFUSAL);
   assert.deepEqual(readPath({ a: [{ b: 1 }, { b: 2 }] }, "a.*.b"), [1, 2]);
+  const structured = composeAnswer(plan, [result], { structured: true });
+  assert.deepEqual(extractStructured(structured).block, { answer_value: "George Russell", refused: false });
+  assert.deepEqual(extractStructured(composeAnswer(plan, [], { structured: true })).block, { answer_value: null, refused: true });
+  assert.match(buildSystemPrompt({ today: "2026-10-07", season: 2026, extraRules: [STRUCTURED_ANSWER_RULE] }), /9\. Finish your reply with a fenced JSON block/);
 });
 
 test("grader: exact, refusals and wrong answers", () => {
@@ -337,6 +464,65 @@ test("grader: exact, refusals and wrong answers", () => {
   assert.equal(gradeAnswer(refusal, "Not available, but Lando Norris probably won.").grade, "wrong");
   assert.equal(summarise([{ grade: "exact" }, { grade: "wrong" }]).passed, false);
   assert.equal(summarise([{ grade: "exact" }, { grade: "correct_refusal" }]).score, 100);
+});
+
+// Review finding 3: the grader checks meaning, not substrings.
+const leader = { kind: "answer", expect: ["Kimi Antonelli"] };
+const block = (value, refused = false) => `\n\n\`\`\`json\n${JSON.stringify({ answer_value: value, refused })}\n\`\`\``;
+
+test("grader (prose): a negated expected value is wrong, not exact", () => {
+  assert.equal(gradeAnswer(leader, "Kimi Antonelli is not the leader; Max Verstappen is.").grade, "wrong");
+  assert.deepEqual(gradeAnswer(leader, "Kimi Antonelli is not the leader; Max Verstappen is.").negated, ["Kimi Antonelli"]);
+  assert.equal(gradeAnswer(leader, "Kimi Antonelli isn't leading the championship.").grade, "wrong");
+  assert.equal(gradeAnswer(leader, "It's not Max Verstappen: Kimi Antonelli leads.").grade, "exact");
+  assert.equal(gradeAnswer(leader, "Kimi Antonelli leads, not Max Verstappen.").grade, "exact");
+  assert.equal(gradeAnswer(leader, "Kimi Antonelli leads the championship.").grade, "exact");
+  assert.equal(valueStance("Lando Norris did not win, but Oscar Piastri did.", "Oscar Piastri"), "asserted");
+  assert.equal(valueStance("Lando Norris did not win.", "Lando Norris"), "negated");
+  assert.equal(valueStance("Nothing here.", "Lando Norris"), "absent");
+});
+
+test("grader (structured): values are compared one by one, never as substrings", () => {
+  const opts = { format: "structured" };
+  assert.equal(gradeAnswer(leader, `Kimi Antonelli leads.${block("Kimi Antonelli")}`, opts).grade, "exact");
+  assert.equal(gradeAnswer(leader, `Kimi Antonelli is not the leader; Max Verstappen is.${block("Max Verstappen")}`, opts).grade, "wrong");
+  assert.equal(gradeAnswer(leader, `Kimi Antonelli is not the leader.${block("Kimi Antonelli")}`, opts).grade, "wrong", "prose contradicting the block");
+  assert.equal(gradeAnswer(leader, `Kimi Antonelli and Max Verstappen.${block("Max Verstappen, Kimi Antonelli")}`, opts).grade, "wrong", "a list in one string is not the value");
+  assert.equal(gradeAnswer(leader, "Kimi Antonelli leads.", opts).grade, "wrong", "no block");
+  assert.equal(gradeAnswer(leader, `Kimi Antonelli leads.\n\`\`\`json\n{"answer_value": "Kimi Antonelli"}\n\`\`\``, opts).grade, "wrong", "malformed block");
+  assert.equal(gradeAnswer(leader, `Not available.${block(null, true)}`, opts).grade, "unnecessary_refusal");
+  assert.equal(gradeAnswer(leader, `Not available.${block("Kimi Antonelli", true)}`, opts).grade, "wrong");
+  const second = { kind: "answer", expect: ["George Russell", "5"] };
+  assert.equal(gradeAnswer(second, `x${block(["George Russell", 5])}`, opts).grade, "exact");
+  assert.equal(gradeAnswer(second, `x${block(["George Russell", 15])}`, opts).grade, "wrong");
+  const refusal = { kind: "refusal", expect: [], forbid: ["Lando Norris"] };
+  assert.equal(gradeAnswer(refusal, `That is not available.${block(null, true)}`, opts).grade, "correct_refusal");
+  assert.equal(gradeAnswer(refusal, `Lando Norris won.${block("Lando Norris")}`, opts).grade, "wrong");
+  assert.equal(gradeAnswer(refusal, `Not available, but Lando Norris won.${block(null, true)}`, opts).grade, "wrong", "forbidden in the prose");
+  assert.equal(valueMatches("P2", 2), true);
+  assert.equal(valueMatches("9th", "P9"), true);
+  assert.equal(valueMatches("357", "357 points"), true);
+  assert.equal(valueMatches("23.4%", 23.4), true);
+  assert.equal(valueMatches("357", "3570"), false);
+  assert.equal(valueMatches("Norris", "Lando Norris"), true);
+  assert.equal(valueMatches("Norris", "Not Norris"), false);
+  assert.equal(valueMatches("Norris", "Lando Norris is not it"), false);
+  assert.equal(valueMatches("11 October", "11 October 2026"), true);
+});
+
+test("grader: refusals and a missed threshold cannot pass a run", () => {
+  const answer = (grade) => ({ kind: "answer", grade });
+  // The review's reproduction: one answerable question refused → was PASS at 0 %.
+  assert.equal(summarise([answer("unnecessary_refusal")]).passed, false);
+  const allRefused = Array.from({ length: 10 }, () => answer("unnecessary_refusal"));
+  assert.equal(summarise(allRefused).passed, false);
+  const nineOfTen = [...Array.from({ length: 9 }, () => answer("exact")), answer("unnecessary_refusal")];
+  assert.equal(summarise(nineOfTen).passed, true);
+  assert.equal(summarise(nineOfTen, { minExact: 0.95 }).passed, false);
+  const eightOfTen = [...Array.from({ length: 8 }, () => answer("exact")), answer("unnecessary_refusal"), answer("unnecessary_refusal")];
+  assert.equal(summarise(eightOfTen).passed, false);
+  assert.equal(summarise([...nineOfTen.slice(0, 9), answer("wrong")], { minExact: 0 }).passed, false, "one wrong answer fails whatever the threshold");
+  assert.equal(summarise([...nineOfTen, { kind: "refusal", grade: "correct_refusal" }]).answerable, 10);
 });
 
 test("bench: about fifty frozen questions, every answerable one with expected values and a source", () => {

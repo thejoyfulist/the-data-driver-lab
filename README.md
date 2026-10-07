@@ -71,7 +71,7 @@ More options (production build, Docker without Compose, Vercel, environment vari
 | `TDD_API_BASE` | runtime (server) | `https://api.thedatadriver.app` | Upstream API used by the server page and the `/api/f1` proxy. |
 | `NEXT_PUBLIC_TDD_API_BASE` | build time | `https://api.thedatadriver.app` | Origin shown in "copy API request" and allowed by the CSP. Also used by the server when `TDD_API_BASE` is unset. |
 | `NEXT_PUBLIC_TDD_REPO_URL` | build time | this repository | "Source" link in the header and footer. |
-| `NEXT_PUBLIC_TDD_AI_CONNECT_SRC` | build time | none | Extra origins (space-separated) the CSP allows for the AI mode, e.g. your own OpenAI-compatible endpoint. |
+| `NEXT_PUBLIC_TDD_AI_CONNECT_SRC` | build time | none | Extra origins (space-separated) the CSP and the AI settings form allow, e.g. your own OpenAI-compatible endpoint or Ollama on another port. HTTPS only (HTTP for the local machine); a `thedatadriver.app` host fails the build. |
 
 Copy `.env.example` to `.env.local` to override them locally.
 
@@ -111,14 +111,18 @@ optional second mode:
   through the [Vercel AI SDK](https://ai-sdk.dev). The model name is free text.
 - **Key safety**: requests go from your browser straight to the provider, never through The Data Driver
   or the `/api/f1` proxy. The key is kept in `sessionStorage` (this tab only) unless you tick
-  "Remember on this device"; "Forget key" removes it. Endpoints on a `thedatadriver.app` host are refused.
+  "Remember on this device"; "Forget key" stops a running question and removes it. Endpoints on a
+  `thedatadriver.app` host are refused whatever their spelling (case, trailing dot, `%2e`, IDNA), and the
+  enforced CSP lets the page reach only the listed providers, a local Ollama and the origins you add in
+  `NEXT_PUBLIC_TDD_AI_CONNECT_SRC`.
 - **Grounding**: the model may answer only from the results of read-only F1 tools over the public API,
   must say "not available" otherwise, and cites its sources; the Lab shows every tool call and source.
   At most 8 tool steps per question.
 - **Ollama**: allow the Lab's origin with `OLLAMA_ORIGINS` (CORS), e.g.
   `OLLAMA_ORIGINS="https://thedatadriver.app" ollama serve`.
-- **Evaluation bench**: about fifty frozen questions graded exact / correct refusal / wrong, with a mock
-  mode that runs in CI (`npm run eval:ai -- --mode mock`).
+- **Evaluation bench**: about fifty frozen questions graded on meaning (a structured answer block for AI
+  runs, negation-aware for the deterministic endpoint). A run passes only with no wrong answer and at
+  least 90 % exact answers; a mock mode runs in CI (`npm run eval:ai -- --mode mock`).
 
 Details, CORS for other servers and the tool catalogue: [docs/AI.md](docs/AI.md).
 

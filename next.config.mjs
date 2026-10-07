@@ -1,21 +1,13 @@
-import { PROVIDER_CONNECT_ORIGINS } from "./src/lib/ai-byok/providers.mjs";
+import { aiConnectOrigins } from "./src/lib/ai-byok/providers.mjs";
 
 const apiOrigin = (process.env.NEXT_PUBLIC_TDD_API_BASE || "https://api.thedatadriver.app").replace(/\/+$/, "");
 
 // "AI — your own key" calls the visitor's provider from the browser: the fixed
 // providers and a local Ollama are allowed. A self-hosted Lab can allow its own
-// OpenAI-compatible endpoints (space-separated origins); see docs/AI.md.
-const extraAiOrigins = (process.env.NEXT_PUBLIC_TDD_AI_CONNECT_SRC || "")
-  .split(/\s+/)
-  .filter(Boolean)
-  .map((value) => {
-    const url = new URL(value);
-    if (url.protocol !== "https:" && !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) {
-      throw new Error(`NEXT_PUBLIC_TDD_AI_CONNECT_SRC: ${value} must use HTTPS (HTTP only for localhost).`);
-    }
-    return url.origin;
-  });
-const connectSources = ["'self'", apiOrigin, ...PROVIDER_CONNECT_ORIGINS, ...extraAiOrigins];
+// OpenAI-compatible endpoints with NEXT_PUBLIC_TDD_AI_CONNECT_SRC
+// (space-separated origins; an invalid entry or a The Data Driver host fails
+// the build). The AI settings form reads the same list. See docs/AI.md.
+const connectSources = ["'self'", apiOrigin, ...aiConnectOrigins()];
 
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",

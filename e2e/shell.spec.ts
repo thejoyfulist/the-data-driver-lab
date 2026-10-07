@@ -31,3 +31,33 @@ test("the proxy forwards allow-listed reads and refuses everything else", async 
   expect(after["/admin/private"] ?? 0).toBe(before["/admin/private"] ?? 0);
   expect(after["/v1/f1/private"] ?? 0).toBe(before["/v1/f1/private"] ?? 0);
 });
+
+test("the Content-Security-Policy is enforced: the Lab renders without violation and cannot reach other origins", async ({ page }) => {
+  const violations: string[] = [];
+  await page.exposeFunction("__cspViolation", (entry: string) => violations.push(entry));
+  await page.addInitScript(() => {
+    document.addEventListener("securitypolicyviolation", (event) => {
+      (window as unknown as { __cspViolation: (entry: string) => void }).__cspViolation(`${event.effectiveDirective} ${event.blockedURI}`);
+    });
+  });
+  const response = await page.goto("/");
+  const headers = response?.headers() ?? {};
+  expect(headers["content-security-policy-report-only"]).toBeUndefined();
+  const policy = headers["content-security-policy"] ?? "";
+  for (const origin of ["https://api.anthropic.com", "https://api.openai.com", "https://openrouter.ai", "https://api.groq.com", "http://localhost:11434", "http://127.0.0.1:11434"]) {
+    expect(policy).toContain(origin);
+  }
+  await expect(page.locator("[data-lab-hydrated=true]")).toHaveCount(1, { timeout: 30_000 });
+  expect(violations).toEqual([]);
+  // The mock API port is not in connect-src: the browser must block the call.
+  const outcome = await page.evaluate(async () => {
+    try {
+      await fetch("http://127.0.0.1:4411/v1/health");
+      return "sent";
+    } catch (error) {
+      return error instanceof TypeError ? "blocked" : String(error);
+    }
+  });
+  expect(outcome).toBe("blocked");
+  await expect.poll(() => violations).toEqual([expect.stringContaining("connect-src http://127.0.0.1:4411")]);
+});

@@ -11,7 +11,7 @@
 import { useId, useMemo, useRef, useState } from "react";
 import { collectSources, createLanguageModel, MAX_TOOL_STEPS, streamGroundedAnswer, type AnswerSource } from "@/lib/ai-byok/agent.mjs";
 import { browserStores, forgetSettings, loadSettings, saveSettings } from "@/lib/ai-byok/key-store.mjs";
-import { checkSettings, isProviderId, PROVIDER_IDS, PROVIDERS, type AiSettings, type ProviderId } from "@/lib/ai-byok/providers.mjs";
+import { aiConnectOrigins, checkSettings, isProviderId, PROVIDER_IDS, PROVIDERS, type AiSettings, type ProviderId } from "@/lib/ai-byok/providers.mjs";
 import { createF1ToolRunner, createProxyFetcher, type F1ToolResult } from "@/lib/f1-tools/catalogue.mjs";
 import { LAB_PROXY_BASE, PUBLIC_API_ORIGIN } from "@/lib/lab-client";
 
@@ -24,6 +24,9 @@ interface ToolCallView {
 }
 
 type RunState = "idle" | "running" | "done" | "error";
+
+/** Abort reason of a run cancelled by "Forget key". */
+const KEY_FORGOTTEN = "key-forgotten";
 
 const buttonClass =
   "min-h-11 rounded-lg px-4 py-3 font-mono text-[11px] uppercase tracking-[0.1em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 disabled:cursor-not-allowed disabled:opacity-40";
@@ -41,7 +44,9 @@ function describeOutcome(call: ToolCallView): string {
   if (!output.ok) return output.error?.message ?? "not available";
   if (output.empty) return "no data published";
   if (output.availability && output.availability !== "completed") return `availability: ${output.availability}`;
-  return output.truncated ? `ok · ${output.truncated.shown} of ${output.truncated.total} rows` : "ok";
+  const cut = output.truncated;
+  if (!cut) return "ok";
+  return cut.total != null ? `ok · ${cut.shown} of ${cut.total} rows` : "ok · long text shortened";
 }
 
 /** Provider error for display; the key is never echoed back. */
@@ -94,16 +99,21 @@ export default function AskAiPanel({ season }: { season: number }) {
   }
 
   function forgetKey() {
+    // Stop the run first: no further provider call may use the key once it
+    // is announced as forgotten (see the guarded fetch in ask()).
+    const running = abortRef.current;
+    running?.abort(KEY_FORGOTTEN);
+    abortRef.current = null;
     forgetSettings(stores);
     setApiKey("");
     setRemember(false);
-    setNotice("Key forgotten on this device.");
+    setNotice(running ? "Run stopped and key forgotten on this device." : "Key forgotten on this device.");
   }
 
   async function ask() {
     const text = question.trim();
     if (!text || state === "running") return;
-    const checked = checkSettings(currentSettings(), { pageOrigin: window.location.origin });
+    const checked = checkSettings(currentSettings(), { pageOrigin: window.location.origin, allowedOrigins: aiConnectOrigins() });
     if (!checked.ok) {
       setError(checked.error);
       return;
@@ -118,11 +128,18 @@ export default function AskAiPanel({ season }: { season: number }) {
 
     const controller = new AbortController();
     abortRef.current = controller;
+    // The key lives only in the provider client built here. Once the run is
+    // stopped, this fetch refuses every further provider call, and nothing
+    // keeps the client (or the key) after the run ends.
+    const guardedFetch: typeof fetch = (input, init) => (controller.signal.aborted
+      ? Promise.reject(new DOMException("The run was stopped.", "AbortError"))
+      : fetch(input, init));
+    let redact = checked.value.apiKey;
     const runner = createF1ToolRunner({ fetchJson: createProxyFetcher(LAB_PROXY_BASE), publicOrigin: PUBLIC_API_ORIGIN });
     const results: F1ToolResult[] = [];
     try {
       const result = streamGroundedAnswer({
-        model: createLanguageModel(checked.value),
+        model: createLanguageModel(checked.value, { fetch: guardedFetch }),
         runner,
         question: text,
         today: new Date().toISOString().slice(0, 10),
@@ -147,10 +164,17 @@ export default function AskAiPanel({ season }: { season: number }) {
       }
       setState("done");
     } catch (caught) {
-      setError(describeError(caught, checked.value.apiKey));
-      setState("error");
+      if (controller.signal.reason === KEY_FORGOTTEN) {
+        setError(null);
+        setState("done");
+      } else {
+        setError(describeError(caught, redact));
+        setState("error");
+      }
     } finally {
-      abortRef.current = null;
+      if (abortRef.current === controller) abortRef.current = null;
+      checked.value.apiKey = "";
+      redact = "";
     }
   }
 

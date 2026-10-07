@@ -92,19 +92,69 @@ export function boundRows(rows, max) {
   return list.length > max ? { rows: list.slice(0, max), truncated: { shown: max, total: list.length } } : { rows: list };
 }
 
-/** Halve list fields until the serialised result fits MAX_RESULT_CHARS. */
-export function fitResult(result, maxChars = MAX_RESULT_CHARS) {
-  let current = result;
-  for (let guard = 0; guard < 12 && JSON.stringify(current).length > maxChars; guard += 1) {
-    const data = current.data;
-    if (!data || typeof data !== "object") break;
-    const key = Object.keys(data).find((name) => Array.isArray(data[name]) && data[name].length > 1);
-    if (!key) break;
-    const total = current.truncated?.total ?? data[key].length;
-    const shown = Math.max(1, Math.floor(data[key].length / 2));
-    current = { ...current, data: { ...data, [key]: data[key].slice(0, shown) }, truncated: { shown, total } };
+/** Longest text field kept as is in a tool result (characters). */
+export const MAX_TEXT_CHARS = 600;
+/** Appended to a text field cut by fitResult. */
+export const TEXT_TRUNCATION_MARK = "…[truncated]";
+
+const serialisedLength = (value) => JSON.stringify(value).length;
+
+/** Copy of `value` with every string longer than `max` cut and marked. */
+function clipText(value, max) {
+  if (typeof value === "string") {
+    return value.length > max ? `${value.slice(0, Math.max(0, max - TEXT_TRUNCATION_MARK.length))}${TEXT_TRUNCATION_MARK}` : value;
   }
-  return current;
+  if (Array.isArray(value)) return value.map((entry) => clipText(entry, max));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, clipText(entry, max)]));
+  return value;
+}
+
+function countClipped(value) {
+  if (typeof value === "string") return value.endsWith(TEXT_TRUNCATION_MARK) ? 1 : 0;
+  if (Array.isArray(value)) return value.reduce((sum, entry) => sum + countClipped(entry), 0);
+  if (value && typeof value === "object") return Object.values(value).reduce((sum, entry) => sum + countClipped(entry), 0);
+  return 0;
+}
+
+/**
+ * Bound a tool result AFTER serialisation: the whole result (data, notes,
+ * API error messages) must fit `maxChars`. Long text fields are cut with a
+ * marker, then list fields are halved, then text is cut harder; as a last
+ * resort the data is dropped with a note. Any cut is reported in
+ * `truncated` ({ shown, total } for rows, `text_fields` for cut strings,
+ * `original_chars` for the size before bounding), so the model can say the
+ * result is partial instead of presenting it as complete.
+ */
+export function fitResult(result, maxChars = MAX_RESULT_CHARS) {
+  const originalChars = serialisedLength(result);
+  const { truncated: rowsCut, ...body } = result;
+  let rows = rowsCut ?? null;
+  let current = clipText(body, MAX_TEXT_CHARS);
+  if (originalChars <= maxChars && countClipped(current) === countClipped(body)) return result;
+  const assemble = (value) => {
+    const textFields = countClipped(value);
+    return { ...value, truncated: { ...(rows ?? {}), ...(textFields ? { text_fields: textFields } : {}), original_chars: originalChars } };
+  };
+
+  for (let guard = 0; guard < 16 && serialisedLength(assemble(current)) > maxChars; guard += 1) {
+    const data = current.data;
+    const key = data && typeof data === "object" && !Array.isArray(data)
+      ? Object.keys(data).find((name) => Array.isArray(data[name]) && data[name].length > 1)
+      : null;
+    if (!key) break;
+    const shown = Math.max(1, Math.floor(data[key].length / 2));
+    rows = { shown, total: rows?.total ?? data[key].length };
+    current = { ...current, data: { ...data, [key]: data[key].slice(0, shown) } };
+  }
+  for (const limit of [300, 150, 80, 40, 20]) {
+    if (serialisedLength(assemble(current)) <= maxChars) break;
+    current = clipText(current, limit);
+  }
+  if (serialisedLength(assemble(current)) > maxChars) {
+    const { availability, reason } = clipText(current, 200);
+    current = { tool: current.tool, ok: current.ok, ...(availability ? { availability } : {}), ...(reason ? { reason } : {}), data: null, note: "The result was too large to return in full: ask for fewer rows.", source: clipText(current.source, 200) };
+  }
+  return assemble(current);
 }
 
 // ── Tool definitions ──────────────────────────────────────────────────
@@ -324,7 +374,10 @@ export const F1_TOOLS = [
     inputSchema: raceInput,
     kind: "openf1_enrichment",
     path: racePath("safety-cars"),
-    shape: (data) => ({ periods: rowsOf(data).slice(0, 20).map((row) => ({ type: text(row.type), start_lap: row.start_lap ?? null, end_lap: row.end_lap ?? null, reason: text(row.reason) })) }),
+    shape: (data) => {
+      const { rows, truncated } = boundRows(rowsOf(data), 20);
+      return { period_count: rowsOf(data).length, periods: rows.map((row) => ({ type: text(row.type), start_lap: row.start_lap ?? null, end_lap: row.end_lap ?? null, reason: text(row.reason) })), truncated };
+    },
   },
   {
     name: "f1_incidents",
@@ -411,13 +464,17 @@ export const F1_TOOLS = [
     inputSchema: raceInput,
     kind: "official",
     path: racePath("ingestion-readiness"),
-    shape: (data) => ({
-      ready: data?.ready ?? null,
-      status: text(data?.status),
-      datasets: rowsOf(data?.datasets).slice(0, 20).map((row) => ({
-        dataset: text(row.dataset), status: text(row.status), reason: text(row.reason), source: text(row.source?.label), source_url: text(row.source?.url),
-      })),
-    }),
+    shape: (data) => {
+      const { rows, truncated } = boundRows(rowsOf(data?.datasets), 20);
+      return {
+        ready: data?.ready ?? null,
+        status: text(data?.status),
+        datasets: rows.map((row) => ({
+          dataset: text(row.dataset), status: text(row.status), reason: text(row.reason), source: text(row.source?.label), source_url: text(row.source?.url),
+        })),
+        truncated,
+      };
+    },
   },
 ];
 
@@ -501,7 +558,7 @@ export function createF1ToolRunner({ fetchJson, publicOrigin = DEFAULT_PUBLIC_AP
     const envelope = body && typeof body === "object" ? body : {};
     if (status < 200 || status >= 300 || envelope.status === "error") {
       const message = text(envelope.error?.message) ?? text(envelope.detail) ?? `The API answered ${status}.`;
-      return { tool: name, ok: false, error: { status, message }, source: describeProvenance(null, tool.kind, apiUrl) };
+      return fitResult({ tool: name, ok: false, error: { status, message }, source: describeProvenance(null, tool.kind, apiUrl) });
     }
     const meta = envelope.meta ?? null;
     const data = withTrustedOfficialRounds(envelope.data ?? null, meta);

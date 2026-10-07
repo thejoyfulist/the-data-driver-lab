@@ -37,14 +37,24 @@ OpenAI-compatible Chat Completions interface.
   requires for calls made from a web page with the user's own key.
 - **Stored in this browser only.** By default the settings (provider, model, endpoint, key) live in
   `sessionStorage` and disappear when the tab is closed. Tick **Remember on this device** to keep them
-  in `localStorage`; untick it or press **Forget key** to remove them. Forget key clears both stores.
-- **Refused endpoints.** A custom endpoint must use HTTPS (plain HTTP only on `localhost`), must not
-  contain a user name or password, and cannot be this site's own origin or a `thedatadriver.app` host,
-  so a mistyped URL cannot send the key to The Data Driver.
-- **Content Security Policy.** `connect-src` allows the API origin, the four hosted providers above and
-  `localhost:11434` / `127.0.0.1:11434` for Ollama. A self-hosted Lab can allow its own endpoints at
-  build time with `NEXT_PUBLIC_TDD_AI_CONNECT_SRC` (space-separated origins, HTTPS only except
-  localhost).
+  in `localStorage`; untick it or press **Forget key** to remove them. Forget key clears both stores,
+  and if a question is running it first stops it: no further call to the provider uses the key.
+- **Refused endpoints.** A custom endpoint must use HTTPS (plain HTTP only on the local machine), must
+  not contain a user name or password, and cannot be a public IP address, this site's own host (or, on
+  the local machine, the Lab's own port under another name such as `127.0.0.1` for `localhost`) or a
+  `thedatadriver.app` host. The host is normalised before the check (lower case, trailing dots removed,
+  `%2e` decoded, IDNA/punycode), so `API.THEDATADRIVER.APP.` or `api%2ethedatadriver%2eapp` are refused
+  like `api.thedatadriver.app`.
+- **Content Security Policy (enforced).** The page sends `Content-Security-Policy` (not Report-Only).
+  Its `connect-src` lists the four hosted providers above, `http://localhost:11434` and
+  `http://127.0.0.1:11434` for Ollama, and nothing else for the AI mode. An endpoint outside this list
+  is refused in the form ("For another endpoint, run the open-source Data Lab…") instead of failing in
+  the browser.
+- **Your own endpoint (self-hosted Lab).** An arbitrary OpenAI-compatible endpoint, or Ollama on another
+  port, is possible in a Lab you build yourself: list its origins at build time in
+  `NEXT_PUBLIC_TDD_AI_CONNECT_SRC` (space-separated; HTTPS only, plain HTTP only for the local machine;
+  a `thedatadriver.app` host or an invalid entry fails the build). The CSP and the settings form use the
+  same list. On thedatadriver.app the list is empty: only the providers above can be reached.
 
 Anyone who can run JavaScript in the page (a malicious browser extension, for instance) can read a key
 held by the page. Use a key you can revoke, with a spending limit, and prefer a local model when that
@@ -90,7 +100,10 @@ All tools are `GET` reads of paths the `/api/f1` proxy already allows. Each resu
 `source` block (`name`, `kind`: `official` / `openf1_enrichment` / `forecast` / `derived`, `licence`,
 `attribution`, `api_url`, `fetched_at`). The API's own `availability` and `reason` fields are passed
 through verbatim; errors and empty datasets come back as such, never filled in. Lists are bounded (row
-limits, a 20-lap window, 8,000 characters per result) and say when they were shortened.
+limits, a 20-lap window) and say when they were shortened: `truncated` gives `{ shown, total }` for a
+cut list. Each serialised result, API error messages included, is capped at 8,000 characters: text
+fields longer than 600 characters are cut with the marker `…[truncated]` (`truncated.text_fields`,
+`truncated.original_chars`), then lists are shortened further if needed.
 
 | Tool | Reads |
 | --- | --- |
@@ -124,9 +137,21 @@ TDD_EVAL_API_KEY=… npm run eval:ai -- --mode provider --provider ollama --mode
 npm run eval:ai:truth                     # re-freeze truth.json and api-snapshot.json from the API
 ```
 
-Each answer is graded **exact** (every expected value present), **correct refusal** (an unanswerable
-question answered "not available"), **unnecessary refusal**, **wrong** or **error**. A single wrong answer
-fails the run. Results are written as JSON and Markdown to `scripts/ai-eval/results/` (ignored by Git).
+Each answer is graded **exact**, **correct refusal** (an unanswerable question answered "not
+available"), **unnecessary refusal** (a failed question), **wrong** or **error**. The grader checks
+meaning, not the presence of words:
+
+- **AI runs (mock and provider)** ask the model to end its reply with a JSON block
+  `{"answer_value": …, "refused": true|false}`. Each expected value must equal one of the listed values
+  (after normalising case, accents, units such as "357 points", positions such as "P2"/"2nd", and a
+  surname given as a full name); a value found only inside a longer string does not count. A missing or
+  malformed block is wrong, and so is prose that negates an expected value.
+- **The deterministic endpoint** answers in sentences: an expected value counts only in a clause that does
+  not negate it, so "Kimi Antonelli is not the leader; Max Verstappen is" is wrong, not exact.
+
+A run **passes** only with no wrong answer, no error, and exact answers for at least 90 % of the
+answerable questions (`--min-exact 0.9`, configurable). Refusing every question therefore fails.
+Results are written as JSON and Markdown to `scripts/ai-eval/results/` (ignored by Git).
 
 In provider mode the tools read the frozen snapshot by default (`--tools live` reads the public API), the
 key is read from `TDD_EVAL_API_KEY` and never written anywhere, and hosted providers (Anthropic, OpenAI,

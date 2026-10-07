@@ -10,7 +10,7 @@ export interface AnswerSource {
 }
 
 export declare const MAX_TOOL_STEPS: number;
-export declare function buildSystemPrompt(context: { today: string; season: number }): string;
+export declare function buildSystemPrompt(context: { today: string; season: number; extraRules?: string[] }): string;
 export declare function createLanguageModel(settings: CheckedSettings, options?: { fetch?: typeof fetch }): LanguageModel;
 export declare function createAiTools(runner: F1ToolRunner): ToolSet;
 export declare function streamGroundedAnswer(options: {
@@ -21,6 +21,7 @@ export declare function streamGroundedAnswer(options: {
   season: number;
   abortSignal?: AbortSignal;
   maxSteps?: number;
+  extraRules?: string[];
 }): { fullStream: AsyncIterable<TextStreamPart<ToolSet>> };
 export declare function collectSources(results: Array<Partial<F1ToolResult> | null | undefined>): AnswerSource[];
 export declare function providerLabel(id: string): string;

@@ -13,7 +13,12 @@
  *       to read the public API). Paid providers need --allow-paid: running
  *       one costs money on the key's account.
  *
+ * AI runs (mock, provider) ask the model to end with a structured
+ * {"answer_value", "refused"} block, graded value by value; the deterministic
+ * endpoint answers in prose, graded clause by clause (see grade.mjs).
+ *
  * Options: --only id,id  --limit N  --out DIR  --base-url URL (ollama/custom)
+ *          --min-exact 0.9 (share of answerable questions that must be exact)
  *          --delay MS (deterministic mode, pause between questions, default 1500)
  * The deterministic endpoint is rate limited: the run stops at the first
  * HTTP 429 and marks the remaining questions "not run" instead of retrying.
@@ -28,7 +33,7 @@ import { createF1ToolRunner, createHttpFetcher, createSnapshotFetcher, DEFAULT_P
 import { checkSettings, PROVIDERS } from "../../src/lib/ai-byok/providers.mjs";
 import { collectSources, createLanguageModel, streamGroundedAnswer } from "../../src/lib/ai-byok/agent.mjs";
 import { createFakeOpenAIServer } from "./fake-openai.mjs";
-import { gradeAnswer, summarise } from "./grade.mjs";
+import { DEFAULT_MIN_EXACT, gradeAnswer, STRUCTURED_ANSWER_RULE, summarise } from "./grade.mjs";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const PAID = new Set(["anthropic", "openai", "openrouter", "groq"]);
@@ -49,13 +54,16 @@ if (limit) questions = questions.slice(0, limit);
 const today = truth.frozen_at.slice(0, 10);
 const season = Number(today.slice(0, 4));
 const outDir = resolve(option("out", resolve(here, "results")));
+const minExact = Number.parseFloat(option("min-exact", String(DEFAULT_MIN_EXACT)));
+if (!(minExact >= 0 && minExact <= 1)) throw new Error("--min-exact must be between 0 and 1");
+const format = mode === "deterministic" ? "prose" : "structured";
 
 async function askModel(model, fetcher, question) {
   const runner = createF1ToolRunner({ fetchJson: fetcher });
   const calls = [];
   const toolResults = [];
   let text = "";
-  const result = streamGroundedAnswer({ model, runner, question, today, season, abortSignal: AbortSignal.timeout(120_000) });
+  const result = streamGroundedAnswer({ model, runner, question, today, season, abortSignal: AbortSignal.timeout(120_000), extraRules: [STRUCTURED_ANSWER_RULE] });
   for await (const part of result.fullStream) {
     if (part.type === "text-delta") text += part.text;
     else if (part.type === "tool-call") calls.push({ tool: part.toolName, input: part.input });
@@ -128,34 +136,36 @@ async function main() {
         if (mode === "deterministic" && /^HTTP 429/.test(outcome.error)) stoppedBy = outcome.error;
       }
     }
-    const graded = gradeAnswer(item, outcome.answer);
-    rows.push({ id: item.id, category: item.category, kind: item.kind, question: item.question, grade: graded.grade, missing: graded.missing, forbidden: graded.forbidden, answer: outcome.answer, error: outcome.error ?? null, tool_calls: outcome.calls, sources: outcome.sources });
+    const graded = gradeAnswer(item, outcome.answer, { format });
+    rows.push({ id: item.id, category: item.category, kind: item.kind, question: item.question, grade: graded.grade, missing: graded.missing, forbidden: graded.forbidden, negated: graded.negated, note: graded.note ?? null, answer: outcome.answer, error: outcome.error ?? null, tool_calls: outcome.calls, sources: outcome.sources });
   }
   fake?.server.close();
 
-  const summary = summarise(rows);
-  const report = { mode, label, ran_at: new Date().toISOString(), truth_frozen_at: truth.frozen_at, summary, rows };
+  const summary = summarise(rows, { minExact });
+  const report = { mode, label, format, ran_at: new Date().toISOString(), truth_frozen_at: truth.frozen_at, summary, rows };
   mkdirSync(outDir, { recursive: true });
   writeFileSync(resolve(outDir, `${label}.json`), `${JSON.stringify(report, null, 2)}\n`);
   writeFileSync(resolve(outDir, `${label}.md`), toMarkdown(report));
-  console.log(`${label}: ${summary.total} questions — exact ${summary.exact}, correct refusals ${summary.correct_refusal}, unnecessary refusals ${summary.unnecessary_refusal}, wrong ${summary.wrong}, errors ${summary.error} — score ${summary.score}% — ${summary.passed ? "PASS" : "FAIL"}`);
+  console.log(`${label}: ${summary.total} questions — exact ${summary.exact}, correct refusals ${summary.correct_refusal}, unnecessary refusals ${summary.unnecessary_refusal}, wrong ${summary.wrong}, errors ${summary.error} — score ${summary.score}%, exact ${summary.exact_rate}% of ${summary.answerable} answerable (minimum ${summary.min_exact}%) — ${summary.passed ? "PASS" : "FAIL"}`);
   if (!summary.passed) process.exitCode = 1;
 }
 
-function toMarkdown({ label, ran_at, truth_frozen_at, summary, rows }) {
+function toMarkdown({ label, format, ran_at, truth_frozen_at, summary, rows }) {
   const cell = (value) => String(value ?? "").replace(/\|/g, "\\|").replace(/\s+/g, " ").slice(0, 160);
   return [
     `# Ask the data — evaluation (${label})`,
     "",
-    `Run ${ran_at}; truth frozen ${truth_frozen_at}.`,
+    `Run ${ran_at}; truth frozen ${truth_frozen_at}; graded as ${format}.`,
     "",
-    "| Total | Exact | Correct refusals | Unnecessary refusals | Wrong | Errors | Score | Verdict |",
-    "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
-    `| ${summary.total} | ${summary.exact} | ${summary.correct_refusal} | ${summary.unnecessary_refusal} | ${summary.wrong} | ${summary.error} | ${summary.score}% | ${summary.passed ? "PASS" : "FAIL"} |`,
+    "PASS requires no wrong answer, no error, and exact answers for at least the minimum share of answerable questions.",
     "",
-    "| Id | Grade | Tools | Answer / error | Missing |",
+    "| Total | Exact | Correct refusals | Unnecessary refusals | Wrong | Errors | Score | Exact / answerable | Verdict |",
+    "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+    `| ${summary.total} | ${summary.exact} | ${summary.correct_refusal} | ${summary.unnecessary_refusal} | ${summary.wrong} | ${summary.error} | ${summary.score}% | ${summary.exact_rate}% (min ${summary.min_exact}%) | ${summary.passed ? "PASS" : "FAIL"} |`,
+    "",
+    "| Id | Grade | Tools | Answer / error | Missing / negated |",
     "| --- | --- | --- | --- | --- |",
-    ...rows.map((row) => `| ${row.id} | ${row.grade} | ${row.tool_calls.map((call) => call.tool).join(", ")} | ${cell(row.error ?? row.answer)} | ${cell(row.missing.join("; "))} |`),
+    ...rows.map((row) => `| ${row.id} | ${row.grade} | ${row.tool_calls.map((call) => call.tool).join(", ")} | ${cell(row.error ?? row.answer)} | ${cell([...row.missing, ...row.negated.map((value) => `negated: ${value}`), ...(row.note ? [row.note] : [])].join("; "))} |`),
     "",
   ].join("\n");
 }

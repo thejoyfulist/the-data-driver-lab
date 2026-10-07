@@ -26,6 +26,12 @@ export interface CheckedSettings {
 export declare const PROVIDERS: Record<ProviderId, ProviderInfo>;
 export declare const PROVIDER_IDS: ProviderId[];
 export declare const PROVIDER_CONNECT_ORIGINS: string[];
+export declare const AI_CONNECT_SRC_ENV: "NEXT_PUBLIC_TDD_AI_CONNECT_SRC";
+export declare function normaliseHost(hostname: string): string | null;
+export declare function isLoopbackHost(host: string | null): boolean;
+export declare function isTddHost(host: string | null): boolean;
+export declare function aiConnectOrigins(extra?: string): string[];
+export declare function parseConnectOrigins(value: string | undefined): string[];
 export declare function isProviderId(value: unknown): value is ProviderId;
 export declare function validateBaseURL(value: string, options?: { pageOrigin?: string }): { ok: true; url: string } | { ok: false; error: string };
-export declare function checkSettings(settings: AiSettings, options?: { pageOrigin?: string }): { ok: true; value: CheckedSettings } | { ok: false; error: string };
+export declare function checkSettings(settings: AiSettings, options?: { pageOrigin?: string; allowedOrigins?: string[] }): { ok: true; value: CheckedSettings } | { ok: false; error: string };

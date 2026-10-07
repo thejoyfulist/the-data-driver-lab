@@ -19,7 +19,8 @@ export interface F1ToolResult {
   reason?: string;
   empty?: boolean;
   note?: string;
-  truncated?: { shown: number; total: number };
+  /** Present when the result was cut: rows ({ shown, total }), long text fields, or both. */
+  truncated?: { shown?: number; total?: number; text_fields?: number; original_chars?: number };
   error?: { status: number | null; message: string };
   source?: F1ToolSource;
 }
@@ -43,6 +44,8 @@ export interface F1ToolRunner {
 
 export declare const DEFAULT_PUBLIC_API_ORIGIN: string;
 export declare const MAX_RESULT_CHARS: number;
+export declare const MAX_TEXT_CHARS: number;
+export declare const TEXT_TRUNCATION_MARK: string;
 export declare const F1_TOOLS: F1ToolDefinition[];
 export declare function formatMs(ms: number | null | undefined): string | null;
 export declare function describeProvenance(meta: unknown, kind: F1SourceKind, apiUrl: string): F1ToolSource;

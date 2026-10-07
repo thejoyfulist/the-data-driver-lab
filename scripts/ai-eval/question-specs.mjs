@@ -73,7 +73,7 @@ export const SPECS = [
     id: "cal-round-16-2026", category: "calendar", kind: "answer",
     question: "Which Grand Prix was round 16 of the 2026 season?",
     sources: [CAL26],
-    truth: ({ get }) => [rows(get(CAL26)).find((r) => r.official_round === 16).circuit.country],
+    truth: ({ get }) => [rows(get(CAL26)).find((r) => r.official_round === 16).name],
     mock: { steps: [race(2026, 25, "round 16")], read: { tool: "f1_resolve_race", path: "data.candidates.0.name" }, template: "Round 16 was the {value}." },
   },
   // ── Drivers' standings ─────────────────────────────────────────────
