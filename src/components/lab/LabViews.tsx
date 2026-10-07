@@ -30,6 +30,7 @@ import {
   biggestClimbFigure,
   buildPositionSeries,
   buildTyreStrategy,
+  topFinisherStrategy,
   TYRE_COMPOUNDS,
   type LabPositionsPayload,
   type LabStintsPayload,
@@ -393,7 +394,9 @@ export function StrategyView({ context }: { context: LabViewContext }) {
 /** Race report card: the tyre strategy of the first ten finishers. */
 export function StrategyGlanceCard({ context, onShowAll }: { context: LabViewContext; onShowAll?: () => void }) {
   const { stintsEndpoint, stints, strategy, tyres } = useTyreStrategy(context);
-  const top = strategy.rows.filter((row) => row.finish != null).slice(0, 10);
+  // P1 to P10 of the official classification, in that order: a finisher
+  // without published stints keeps their row (stated), never replaced by P11.
+  const { rows: top, missing } = useMemo(() => topFinisherStrategy(strategy, context.results, 10), [strategy, context.results]);
   return (
     <ViewCard
       id="lab-report-strategy"
@@ -416,6 +419,11 @@ export function StrategyGlanceCard({ context, onShowAll }: { context: LabViewCon
       ) : (
         <>
           <TyreStrategyChart rows={top} maxLap={strategy.maxLap} compact />
+          {missing.length > 0 && (
+            <p className="mt-3 text-[13px] text-white/[0.70]" data-strategy-missing>
+              No stints published for {missing.map((row) => `P${row.finish} ${row.name}`).join(", ")}: {missing.length === 1 ? "that row is" : "those rows are"} left empty, never filled from another driver.
+            </p>
+          )}
           <PartialNote text={tyres.partial} />
           {onShowAll && (
             <button type="button" onClick={onShowAll} className="mt-3 inline-flex min-h-11 items-center text-[13px] lg:min-h-9 text-white/[0.78] underline-offset-4 hover:text-light hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70">
@@ -526,7 +534,7 @@ export function PositionsView({ context }: { context: LabViewContext }) {
           <PartialNote text={state.partial} />
           <p className="mt-3 text-[13px] text-white/[0.70]" data-biggest-climb>
             Biggest climb ·{" "}
-            {climb.state === "ok" ? <><span className="font-mono text-light">{climb.value}</span> · {climb.detail}</> : <span className="text-ambre">{climb.reason}</span>}
+            {climb.state === "ok" ? <><span className="font-mono text-light">{climb.value}</span> · {climb.detail} <span className="text-white/[0.62]" data-climb-basis={climb.basis}>· {climb.scope}</span></> : <span className="text-ambre">{climb.reason}</span>}
           </p>
           {raceLaps > 0 && (
             <div className="mt-4 border-t border-white/[0.06] pt-4" onPointerLeave={() => setLapCursor(null)} data-positions-strip>

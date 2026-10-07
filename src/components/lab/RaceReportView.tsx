@@ -85,8 +85,9 @@ function fastestFrom(resource: LabResource<LabFastestLaps>): KeyFigure | "loadin
 }
 
 /**
- * Biggest climb of the race: from lap-by-lap positions when they are
- * published, otherwise grid → finish from the official classification
+ * Biggest climb of the race: from lap-by-lap positions when every classified
+ * driver is covered, restricted (and labelled) to the covered drivers when
+ * they are partial, otherwise grid → finish from the official classification
  * (labelled as such). Loading results or positions never shows a number.
  */
 function climbFrom(resource: LabResource<LabPositionsPayload>, results: LabViewContext["results"], resultsLoading: boolean): ClimbFigure | "loading" {
@@ -105,7 +106,7 @@ function PositionsLine({ figure, onOpen }: { figure: ClimbFigure | "loading"; on
       ) : figure.state === "ok" ? (
         <span className="min-w-0">
           Biggest climb <span className="font-mono text-light" data-climb-value>{figure.value}</span> · <span data-climb-detail>{figure.detail}</span>
-          <span className="text-white/[0.62]" data-climb-basis> · {figure.basis === "positions" ? "from lap-by-lap positions" : "grid to finish; lap-by-lap positions not published yet"}</span>
+          <span className="text-white/[0.62]" data-climb-basis={figure.basis}> · {figure.scope}</span>
         </span>
       ) : (
         <span className="min-w-0"><span className="text-ambre">Not available</span> · {figure.reason}</span>
@@ -119,7 +120,7 @@ function PositionsLine({ figure, onOpen }: { figure: ClimbFigure | "loading"; on
 
 function Figure({ id, label, figure }: { id: string; label: string; figure: KeyFigure | "loading" }) {
   return (
-    <div className="min-w-0 rounded-xl border border-white/[0.08] bg-white/[0.018] px-3 py-2.5 md:px-4 md:py-3.5" data-key-figure={id}>
+    <div className="min-w-0 rounded-xl border border-white/[0.08] bg-white/[0.018] px-3 py-2 md:px-4 md:py-3.5" data-key-figure={id}>
       <dt className="text-[13px] text-white/[0.70]">{label}</dt>
       {figure === "loading" ? (
         <dd className="mt-1 h-8 w-24 animate-pulse rounded bg-white/[0.06] motion-reduce:animate-none" role="status"><span className="sr-only">Loading {label.toLowerCase()}</span></dd>
@@ -202,11 +203,12 @@ export function RaceReportView({ context, race, isLatestCompleted, onSelectView,
       </header>
 
       {apiOpen && <ApiPanel title="Race report" endpoints={endpoints} exportRows={exportRows} exportName={exportBasename("race-report", context.season, context.roundSlug)} />}
-      <dl className="mt-4 grid grid-cols-2 gap-2 md:mt-5 md:gap-2.5 lg:grid-cols-4" aria-label="Key figures" data-key-figures>
+      <dl className="mt-3 grid grid-cols-2 gap-2 md:mt-5 md:gap-2.5 lg:grid-cols-4" aria-label="Key figures" data-key-figures>
         {figures.map((item) => <Figure key={item.id} {...item} />)}
       </dl>
 
-      <div className="mt-5 grid grid-cols-1 gap-3 xl:grid-cols-2">
+      {/* Tighter spacing on a phone so the first chart clears the fixed action bar. */}
+      <div className="mt-3 grid grid-cols-1 gap-3 md:mt-5 xl:grid-cols-2">
         <FastestLapsView context={context} variant="card" limit={6} onShowAll={() => onSelectView("fastest")} />
         {/* After the first chart on a phone (it must stay in the first screen), right under the key figures from md up. */}
         <PositionsLine figure={climb} onOpen={() => onSelectView("positions")} />

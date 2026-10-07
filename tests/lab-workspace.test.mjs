@@ -33,6 +33,9 @@ import {
   biggestClimbFigure,
   buildPositionSeries,
   buildTyreStrategy,
+  officialStops,
+  stintChangesOutsideSummary,
+  topFinisherStrategy,
   compoundSequence,
   describeStint,
   normaliseCompound,
@@ -289,6 +292,55 @@ test("strategy: rows in finishing order, official stops when published, stint ch
   assert.equal(buildTyreStrategy(null).availability, null);
 });
 
+test("strategy: a stint change outside the official pit summary is marked even when the driver has an official stop", () => {
+  // Review scenario: stints 1–3, 4–6, 7–10 and a single official stop on lap 3.
+  const stints = { availability: "complete", race_laps: 10, drivers: [contractDriver(1, "AAA", "Ann", "Alpha", { stints: [
+    { stint_number: 1, compound: "MEDIUM", start_lap: 1, end_lap: 3 },
+    { stint_number: 2, compound: "HARD", start_lap: 4, end_lap: 6 },
+    { stint_number: 3, compound: "SOFT", start_lap: 7, end_lap: 10 },
+  ] })] };
+  const [row] = buildTyreStrategy(stints, classified, [{ driver_code: "AAA", lap: 3, duration_ms: 22_000 }]).rows;
+  assert.deepEqual(row.stops, [{ lap: 3, durationMs: 22_000, derived: false }, { lap: 6, durationMs: null, derived: true }]);
+  assert.deepEqual(officialStops(row).map((stop) => stop.lap), [3], "the dashed change is never counted as an official stop");
+  assert.deepEqual(stintChangesOutsideSummary(row).map((stop) => stop.lap), [6]);
+  // A stop recorded on the out-lap still covers its boundary; each stop covers one boundary only.
+  const [outLap] = buildTyreStrategy(stints, classified, [{ driver_code: "AAA", lap: 4 }, { driver_code: "AAA", lap: 7 }]).rows;
+  assert.deepEqual(stintChangesOutsideSummary(outLap), []);
+  const [single] = buildTyreStrategy({ ...stints, drivers: [contractDriver(1, "AAA", "Ann", "Alpha", { stints: [
+    { stint_number: 1, compound: "MEDIUM", start_lap: 1, end_lap: 3 },
+    { stint_number: 2, compound: "HARD", start_lap: 4, end_lap: 4 },
+    { stint_number: 3, compound: "SOFT", start_lap: 5, end_lap: 10 },
+  ] })] }, classified, [{ driver_code: "AAA", lap: 4 }]).rows;
+  assert.deepEqual(single.stops.map((stop) => [stop.lap, stop.derived]), [[3, true], [4, false]]);
+  // Overlapping stints (source disagreement): the boundary is still matched to the official stop.
+  const [overlap] = buildTyreStrategy({ ...stints, drivers: [contractDriver(1, "AAA", "Ann", "Alpha", { stints: [
+    { stint_number: 1, compound: "MEDIUM", start_lap: 1, end_lap: 6 },
+    { stint_number: 2, compound: "HARD", start_lap: 5, end_lap: 10 },
+  ] })] }, classified, [{ driver_code: "AAA", lap: 6 }]).rows;
+  assert.deepEqual(overlap.stops, [{ lap: 6, durationMs: null, derived: false }]);
+});
+
+test("strategy top 10: P1 to P10 of the official classification, a missing finisher kept and stated", () => {
+  const results = Array.from({ length: 12 }, (_, index) => ({ driver_id: 10 + index, driver_code: `P${String(index + 1).padStart(2, "0")}`.slice(0, 3), first_name: "Driver", last_name: `${index + 1}`, position: index + 1, grid: index + 1 }));
+  results[0].driver_code = "WIN";
+  // /stints partial: P1 omitted, P2 to P12 published.
+  const stints = { availability: "partial", reason: "One driver missing.", race_laps: 10, drivers: results.slice(1).map((result) => contractDriver(result.driver_id, result.driver_code, "Driver", result.last_name, {
+    stints: [{ stint_number: 1, compound: "MEDIUM", start_lap: 1, end_lap: 10 }],
+  })) };
+  const strategy = buildTyreStrategy(stints, results, []);
+  const { rows, missing } = topFinisherStrategy(strategy, results, 10);
+  assert.deepEqual(rows.map((row) => row.finish), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "never P11, never without P1");
+  assert.equal(rows[0].code, "WIN");
+  assert.equal(rows[0].missing, true);
+  assert.deepEqual(rows[0].stints, []);
+  assert.deepEqual(missing.map((row) => row.name), ["Driver 1"]);
+  assert.equal(rows[1].missing, false);
+  assert.equal(rows[1].stints.length, 1);
+  // Fewer classified finishers than ten: only those, in order.
+  assert.deepEqual(topFinisherStrategy(strategy, results.slice(0, 3), 10).rows.map((row) => row.finish), [1, 2, 3]);
+  assert.deepEqual(topFinisherStrategy(strategy, [], 10).rows, []);
+});
+
 const positionsFixture = {
   availability: "complete",
   method: "Order at each lap line",
@@ -315,23 +367,78 @@ test("positions: series in finishing order, gaps kept, duplicates and invalid ro
   assert.deepEqual(orderAtLap(series, 4), []);
 });
 
+// Every lap 0–5 published for the three classified drivers (race_laps 5).
+const fullLaps = (positions) => positions.map((position, lap) => ({ lap, position }));
+const climbFixture = {
+  availability: "complete",
+  race_laps: 5,
+  drivers: [
+    // Charlie: P6 on the grid, drops to P8 on lap 2, finishes P3 → +5 in the race (+3 grid to finish).
+    contractDriver(3, "CCC", "Cal", "Charlie", { grid: 6, finish: 3, positions: fullLaps([6, 7, 8, 5, 4, 3]) }),
+    contractDriver(1, "AAA", "Ann", "Alpha", { grid: 3, finish: 1, positions: fullLaps([3, 2, 1, 1, 1, 1]) }),
+    contractDriver(2, "BBB", "Bea", "Bravo", { grid: 1, finish: 2, positions: fullLaps([1, 1, 2, 2, 2, 2]) }),
+    contractDriver(4, "DDD", "Dee", "Delta", { grid: 2, finish: null, positions: [{ lap: 0, position: 2 }, { lap: 1, position: 3 }] }),
+  ],
+};
+
 test("biggest climb: from the lowest position held (grid included) to the finish, classified drivers only", () => {
-  assert.deepEqual(biggestClimbFigure(positionsFixture, classified), { state: "ok", value: "+5", detail: "Cal Charlie, P8 on lap 2 to P3", basis: "positions", code: "CCC" });
+  assert.deepEqual(biggestClimbFigure(climbFixture, classified), { state: "ok", value: "+5", detail: "Cal Charlie, P8 on lap 2 to P3", basis: "positions", scope: "from lap-by-lap positions", code: "CCC" });
+  const only = (drivers) => ({ ...climbFixture, drivers });
+  const results = classified.filter((result) => ["AAA", "BBB", "CCC"].includes(result.driver_code));
   // A driver who never ran lower than the grid climbs from the grid.
-  const fromGrid = { ...positionsFixture, drivers: [contractDriver(3, "CCC", "Cal", "Charlie", { grid: 6, finish: 3, positions: [{ lap: 0, position: 6 }, { lap: 1, position: 5 }, { lap: 5, position: 3 }] })] };
-  assert.equal(biggestClimbFigure(fromGrid, classified).detail, "Cal Charlie, P6 on the grid to P3");
+  const fromGrid = only([
+    contractDriver(3, "CCC", "Cal", "Charlie", { grid: 6, finish: 3, positions: fullLaps([6, 5, 5, 4, 4, 3]) }),
+    climbFixture.drivers[1], climbFixture.drivers[2],
+  ]);
+  assert.equal(biggestClimbFigure(fromGrid, results).detail, "Cal Charlie, P6 on the grid to P3");
   // Ties are named, never resolved silently.
-  const tied = { ...positionsFixture, drivers: [
-    contractDriver(1, "AAA", "Ann", "Alpha", { finish: 1, positions: [{ lap: 0, position: 3 }, { lap: 2, position: 3 }, { lap: 5, position: 1 }] }),
-    contractDriver(2, "BBB", "Bea", "Bravo", { finish: 2, positions: [{ lap: 0, position: 4 }, { lap: 5, position: 2 }] }),
-  ] };
-  assert.deepEqual(biggestClimbFigure(tied, classified), { state: "ok", value: "+2", detail: "Tied: Ann Alpha and Bea Bravo", basis: "positions" });
-  const flat = { ...positionsFixture, drivers: [contractDriver(1, "AAA", "Ann", "Alpha", { finish: 1, positions: [{ lap: 0, position: 1 }, { lap: 5, position: 1 }] })] };
-  assert.equal(biggestClimbFigure(flat, classified).value, "0");
+  const tied = only([
+    contractDriver(1, "AAA", "Ann", "Alpha", { finish: 1, positions: fullLaps([3, 3, 3, 2, 1, 1]) }),
+    contractDriver(2, "BBB", "Bea", "Bravo", { finish: 2, positions: fullLaps([4, 4, 3, 3, 2, 2]) }),
+  ]);
+  assert.deepEqual(biggestClimbFigure(tied, results.slice(0, 2)), { state: "ok", value: "+2", detail: "Tied: Ann Alpha and Bea Bravo", basis: "positions", scope: "from lap-by-lap positions" });
+  const flat = only([contractDriver(1, "AAA", "Ann", "Alpha", { finish: 1, positions: fullLaps([1, 1, 1, 1, 1, 1]) })]);
+  assert.equal(biggestClimbFigure(flat, results.slice(0, 1)).value, "0");
+});
+
+test("biggest climb: partial positions never give a race-wide maximum", () => {
+  // Review scenario: one driver P3 on lap 1 → P1 (+2) has every lap; another
+  // classified driver has no published position at all. The +2 is only the
+  // largest climb among the covered drivers, and says so.
+  const results = [
+    { driver_id: 1, driver_code: "AAA", first_name: "Ann", last_name: "Alpha", position: 1, grid: 2, laps: 5 },
+    { driver_id: 2, driver_code: "BBB", first_name: "Bea", last_name: "Bravo", position: 2, grid: 9, laps: 5 },
+  ];
+  const partial = {
+    availability: "partial", reason: "Positions missing for one driver.", race_laps: 5,
+    drivers: [contractDriver(1, "AAA", "Ann", "Alpha", { grid: 2, finish: 1, positions: fullLaps([2, 3, 3, 2, 1, 1]) })],
+  };
+  assert.deepEqual(biggestClimbFigure(partial, results), {
+    state: "ok", value: "+2", detail: "Ann Alpha, P3 on lap 1 to P1", basis: "positions-partial", code: "AAA",
+    scope: "among the 1 of 2 classified drivers with complete lap positions (partial data: Positions missing for one driver.)",
+  });
+  // Missing early laps (lap 1–2 absent) leave a driver out of the covered set,
+  // even when the payload claims "complete".
+  const gaps = {
+    availability: "complete", race_laps: 5,
+    drivers: [
+      contractDriver(1, "AAA", "Ann", "Alpha", { grid: 2, finish: 1, positions: fullLaps([2, 3, 3, 2, 1, 1]) }),
+      contractDriver(2, "BBB", "Bea", "Bravo", { grid: 9, finish: 2, positions: [{ lap: 0, position: 9 }, { lap: 3, position: 4 }, { lap: 4, position: 3 }, { lap: 5, position: 2 }] }),
+    ],
+  };
+  const restricted = biggestClimbFigure(gaps, results);
+  assert.equal(restricted.basis, "positions-partial");
+  assert.equal(restricted.scope, "among the 1 of 2 classified drivers with complete lap positions");
+  // No covered driver: grid → finish from the classification, labelled as incomplete positions.
+  const none = { ...gaps, drivers: [gaps.drivers[1]] };
+  assert.deepEqual(biggestClimbFigure(none, results), {
+    state: "ok", value: "+7", detail: "Bea Bravo, P9 to P2", basis: "grid", code: "BBB",
+    scope: "grid to finish (official classification); lap-by-lap positions are incomplete",
+  });
 });
 
 test("biggest climb: falls back to grid → finish from the classification, and says so", () => {
-  const expected = { state: "ok", value: "+3", detail: "Cal Charlie, P6 to P3", basis: "grid", code: "CCC" };
+  const expected = { state: "ok", value: "+3", detail: "Cal Charlie, P6 to P3", basis: "grid", scope: "grid to finish; lap-by-lap positions not published yet", code: "CCC" };
   assert.deepEqual(biggestClimbFigure(null, classified), expected);
   assert.deepEqual(biggestClimbFigure({ availability: "unavailable", reason: "Not yet", drivers: [] }, classified), expected);
   // Positions published only for the grid (no lap run yet): not a race climb.

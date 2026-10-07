@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { formatLapMs } from "@/lib/lab-client";
-import { COMPOUND_ORDER, compoundSequence, describeStint, TYRE_COMPOUNDS, type TyreCompound, type TyreCompoundId, type TyreStrategyRow } from "@/lib/lab-strategy.mjs";
+import { COMPOUND_ORDER, compoundSequence, describeStint, officialStops, stintChangesOutsideSummary, TYRE_COMPOUNDS, type TyreCompound, type TyreCompoundId, type TyreStrategyRow } from "@/lib/lab-strategy.mjs";
 import { readableTeamColor, teamColor } from "@/lib/team-colors";
 
 function lapTicks(maxLap: number): number[] {
@@ -59,17 +59,30 @@ export function TyreLegend({ compounds, prefix, showDerived }: { compounds: read
         </li>
       ))}
       <li className="flex items-center gap-1.5"><span aria-hidden="true" className="inline-block h-4 w-[2px] bg-light" />Pit stop</li>
-      {showDerived && <li className="flex items-center gap-1.5"><span aria-hidden="true" className="inline-block h-4 border-l-2 border-dashed border-light" />Stint change (stop not in the pit-stop summary)</li>}
+      {showDerived && <li className="flex items-center gap-1.5" data-legend-derived><span aria-hidden="true" className="inline-block h-4 border-l-2 border-dashed border-light" />Stint change not in the official pit summary</li>}
       <li className="text-white/[0.70]"><span className="font-mono text-[12px]">M(3)</span> tyre already 3 laps old when the stint began</li>
     </ul>
   );
 }
 
 function rowLabel(row: TyreStrategyRow): string {
-  const stops = row.stops.length
-    ? `${row.stops.length} ${row.stops.length === 1 ? "stop" : "stops"} on lap ${row.stops.map((stop) => stop.lap).join(", ")}`
-    : "no stop";
-  return `${row.finish != null ? `P${row.finish}` : "Not classified"} ${row.name}: ${row.stints.map(describeStint).join("; ")}; ${stops}`;
+  const place = row.finish != null ? `P${row.finish}` : "Not classified";
+  if (row.missing) return `${place} ${row.name}: stints not published`;
+  const official = officialStops(row);
+  const changes = stintChangesOutsideSummary(row);
+  const stops = official.length
+    ? `${official.length} official ${official.length === 1 ? "pit stop" : "pit stops"} on lap ${official.map((stop) => stop.lap).join(", ")}`
+    : "no official pit stop";
+  const extra = changes.length
+    ? `; ${changes.length} ${changes.length === 1 ? "stint change" : "stint changes"} after lap ${changes.map((stop) => stop.lap).join(", ")} not in the official pit summary`
+    : "";
+  return `${place} ${row.name}: ${row.stints.map(describeStint).join("; ")}; ${stops}${extra}`;
+}
+
+/** Official pit stops only: a stint change outside the summary is drawn, never counted as a stop. */
+function stopCount(row: TyreStrategyRow): string {
+  const count = officialStops(row).length;
+  return `${count} ${count === 1 ? "stop" : "stops"}`;
 }
 
 interface TyreStrategyChartProps {
@@ -100,13 +113,18 @@ export function TyreStrategyChart({ rows, maxLap, compact = false }: TyreStrateg
       {!compact && <TyreLegend compounds={compounds} prefix={prefix} showDerived={showDerived} />}
       <ol className="space-y-1" aria-label="Tyre strategy by driver, in finishing order">
         {rows.map((row) => (
-          <li key={row.code} className={grid} aria-label={rowLabel(row)} data-strategy-row={row.code}>
+          <li key={`${row.finish ?? "nc"}-${row.code}`} className={grid} aria-label={rowLabel(row)} data-strategy-row={row.code}>
             <span className="flex min-w-0 items-center gap-1.5" aria-hidden="true">
               <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: teamColor(row.team) }} />
               <span className="font-mono text-[12px] tabular-nums text-white/[0.66]">{row.finish != null ? `P${row.finish}` : "NC"}</span>
               <span className="truncate font-mono text-[12px]" style={{ color: readableTeamColor(row.team) }}>{row.code}</span>
             </span>
             <span className={`relative block ${compact ? "h-5" : "h-6"} rounded-sm bg-white/[0.03]`} aria-hidden="true">
+              {row.missing && (
+                <span className="absolute inset-0 flex items-center rounded-sm border border-dashed border-white/[0.16] px-2 text-[12px] text-white/[0.70]" data-stints-missing>
+                  Stints not published
+                </span>
+              )}
               {row.stints.map((stint) => {
                 const compound = TYRE_COMPOUNDS[stint.compound];
                 return (
@@ -127,16 +145,16 @@ export function TyreStrategyChart({ rows, maxLap, compact = false }: TyreStrateg
               })}
               {row.stops.map((stop) => (
                 <span
-                  key={`stop-${stop.lap}`}
+                  key={`${stop.derived ? "change" : "stop"}-${stop.lap}`}
                   className={`absolute -top-0.5 h-[calc(100%+4px)] -translate-x-px ${stop.derived ? "border-l-2 border-dashed border-light" : "w-[2px] bg-light"}`}
                   style={{ left: pct(stop.lap) }}
-                  title={stop.derived ? `Stint change after lap ${stop.lap} (stop not in the pit-stop summary)` : `Pit stop · lap ${stop.lap}${stop.durationMs != null ? ` · ${formatLapMs(stop.durationMs)} pit lane` : ""}`}
+                  title={stop.derived ? `Stint change after lap ${stop.lap}, not in the official pit summary` : `Pit stop · lap ${stop.lap}${stop.durationMs != null ? ` · ${formatLapMs(stop.durationMs)} pit lane` : ""}`}
                   data-stop={stop.derived ? "derived" : "official"}
                 />
               ))}
             </span>
             <span className={`${compact ? "hidden sm:block" : ""} text-right font-mono text-[12px] tabular-nums text-white/[0.70]`} aria-hidden="true">
-              {compact ? compoundSequence(row) : `${row.stops.length} ${row.stops.length === 1 ? "stop" : "stops"}`}
+              {row.missing ? "—" : compact ? compoundSequence(row) : stopCount(row)}
             </span>
           </li>
         ))}
@@ -152,6 +170,12 @@ export function TyreStrategyChart({ rows, maxLap, compact = false }: TyreStrateg
         </span>
         {!compact && <span />}
       </div>
+      {compact && showDerived && (
+        <p className="flex items-center gap-1.5 text-[12px] text-white/[0.70]" data-legend-derived>
+          <span aria-hidden="true" className="inline-block h-3.5 border-l-2 border-dashed border-light" />
+          Stint change not in the official pit summary
+        </p>
+      )}
     </div>
   );
 }

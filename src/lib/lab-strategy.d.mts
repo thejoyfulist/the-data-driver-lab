@@ -57,6 +57,7 @@ interface ResultLike {
   team_name?: string | null;
   position?: number | null;
   grid?: number | null;
+  laps?: number | null;
 }
 
 interface PitStopLike {
@@ -81,7 +82,10 @@ export interface TyreStrategyRow {
   team: string;
   finish: number | null;
   stints: TyreStint[];
+  /** Official stops (`derived: false`) and stint changes the official summary does not list (`derived: true`). */
   stops: { lap: number; durationMs: number | null; derived: boolean }[];
+  /** Official top-10 row whose stints are not published. */
+  missing?: boolean;
 }
 
 export interface TyreStrategy {
@@ -113,13 +117,16 @@ export interface PositionSeries {
 }
 
 export type ClimbFigure =
-  | { state: "ok"; value: string; detail: string; basis: "positions" | "grid"; code?: string | null }
+  | { state: "ok"; value: string; detail: string; basis: "positions" | "positions-partial" | "grid"; scope: string; code?: string | null }
   | { state: "unavailable"; reason: string };
 
 export declare const TYRE_COMPOUNDS: Record<TyreCompoundId, TyreCompound>;
 export declare const COMPOUND_ORDER: readonly TyreCompoundId[];
 export declare function normaliseCompound(value: unknown): TyreCompoundId;
 export declare function buildTyreStrategy(data: LabStintsPayload | null | undefined, results?: readonly ResultLike[], pitStops?: readonly PitStopLike[]): TyreStrategy;
+export declare function officialStops(row: Pick<TyreStrategyRow, "stops"> | null | undefined): TyreStrategyRow["stops"];
+export declare function stintChangesOutsideSummary(row: Pick<TyreStrategyRow, "stops"> | null | undefined): TyreStrategyRow["stops"];
+export declare function topFinisherStrategy(strategy: Pick<TyreStrategy, "rows"> | null | undefined, results?: readonly ResultLike[], count?: number): { rows: TyreStrategyRow[]; missing: TyreStrategyRow[] };
 export declare function compoundSequence(row: Pick<TyreStrategyRow, "stints"> | null | undefined): string;
 export declare function describeStint(stint: TyreStint): string;
 export declare function buildPositionSeries(data: LabPositionsPayload | null | undefined, results?: readonly ResultLike[]): PositionSeries;

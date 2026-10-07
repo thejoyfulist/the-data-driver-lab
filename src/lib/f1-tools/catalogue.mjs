@@ -375,16 +375,29 @@ export const F1_TOOLS = [
   {
     name: "f1_stints",
     title: "Tyre strategy",
-    description: "Tyre stints of a race per driver: compound (SOFT, MEDIUM, HARD, INTERMEDIATE, WET or UNKNOWN), start and end lap, laps and tyre age at the start of the stint, with the compound sequence and stop count. Optionally one driver code. Non-official OpenF1 enrichment.",
+    description: "Tyre stints of a race per driver: compound (SOFT, MEDIUM, HARD, INTERMEDIATE, WET or UNKNOWN), start and end lap, laps and tyre age at the start of the stint, with the compound sequence. stint_changes counts stint boundaries in the OpenF1 stints (not pit stops: a tyre change under a red flag or a missing stint changes it); pit_stops is the driver's count in the official formula1.com pit-stop summary, or null when that summary is unavailable. Optionally one driver code. Stints are non-official OpenF1 enrichment.",
     inputSchema: raceInput.extend({ driver_code: z.string().regex(/^[A-Za-z]{3}$/).optional().describe("Three-letter driver code, e.g. NOR."), limit: limit(10, 22) }),
     kind: "openf1_enrichment",
     path: racePath("stints"),
-    shape: (data, input) => {
+    // The official pit-stop summary, read alongside so stops are never
+    // inferred from stint boundaries.
+    related: (input) => ({ pitstops: racePath("pitstops")(input) }),
+    shape: (data, input, related = {}) => {
       const code = input.driver_code?.toUpperCase();
       const all = rowsOf(data?.drivers).filter((row) => !code || text(row.driver_code)?.toUpperCase() === code);
       const { rows, truncated } = boundRows(all, input.limit ?? 10);
+      const summary = related.pitstops;
+      const officialStops = summary?.ok && Array.isArray(summary.data) ? summary.data : null;
+      const stopsOf = (row) => {
+        if (!officialStops) return null;
+        const driver = text(row.driver_code)?.toUpperCase();
+        return driver ? officialStops.filter((stop) => text(stop.driver_code)?.toUpperCase() === driver).length : null;
+      };
       return {
         race_laps: data?.race_laps ?? null,
+        pit_stops_source: officialStops
+          ? "formula1.com pit-stop summary (/pitstops)"
+          : `Official pit-stop summary unavailable${summary?.status ? ` (HTTP ${summary.status})` : ""}; pit_stops is null and is never inferred from stint changes.`,
         drivers: rows.map((row) => {
           const stints = rowsOf(row.stints).slice(0, 12).map((stint) => ({
             stint: stint.stint_number ?? null, compound: text(stint.compound), start_lap: stint.start_lap ?? null, end_lap: stint.end_lap ?? null,
@@ -393,7 +406,8 @@ export const F1_TOOLS = [
           return {
             ...driverRow(row), team: text(row.team_name),
             sequence: stints.map((stint) => stint.compound ?? "UNKNOWN").join("-") || null,
-            stops: Math.max(0, stints.length - 1),
+            stint_changes: Math.max(0, stints.length - 1),
+            pit_stops: stopsOf(row),
             stints,
           };
         }),
@@ -617,6 +631,21 @@ export function createF1ToolRunner({ fetchJson, publicOrigin = DEFAULT_PUBLIC_AP
   }
 
   /**
+   * Companion datasets a tool reads next to its main path (e.g. the official
+   * pit-stop summary for f1_stints): `{ key: { ok, status, data } }`. A
+   * failure is passed on as `ok: false`, never as an empty dataset.
+   */
+  async function loadRelated(paths) {
+    const entries = await Promise.all(Object.entries(paths).map(async ([key, path]) => {
+      const { status, body } = await load(path);
+      const envelope = body && typeof body === "object" ? body : {};
+      const ok = status >= 200 && status < 300 && envelope.status !== "error";
+      return [key, { ok, status, data: ok ? envelope.data ?? null : null }];
+    }));
+    return Object.fromEntries(entries);
+  }
+
+  /**
    * Run one tool. Never throws: invalid input, HTTP errors and network
    * failures come back as `{ ok: false, error }` the model can report.
    */
@@ -642,7 +671,7 @@ export function createF1ToolRunner({ fetchJson, publicOrigin = DEFAULT_PUBLIC_AP
     if (data == null) {
       return { tool: name, ok: true, data: null, empty: true, note: "The API published no data for this request.", source };
     }
-    const shaped = tool.shape(data, input);
+    const shaped = tool.shape(data, input, tool.related ? await loadRelated(tool.related(input)) : undefined);
     const { truncated, ...rest } = shaped;
     const result = { tool: name, ok: true, ...availabilityOf(data), data: rest, ...(truncated ? { truncated } : {}), source };
     return fitResult(result);

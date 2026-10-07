@@ -17,16 +17,17 @@ const args = process.argv.slice(2);
 const apiIndex = args.indexOf("--api");
 const apiBase = (apiIndex >= 0 ? args[apiIndex + 1] : DEFAULT_PUBLIC_API_ORIGIN).replace(/\/+$/, "");
 const here = new URL(".", import.meta.url);
-const toolPath = new Map(F1_TOOLS.map((tool) => [tool.name, tool.path]));
+const toolByName = new Map(F1_TOOLS.map((tool) => [tool.name, tool]));
 
 const paths = new Set();
 for (const spec of SPECS) {
   for (const path of spec.sources) paths.add(path);
   for (const step of spec.mock.steps ?? []) {
     for (const call of step) {
-      const build = toolPath.get(call.name);
-      if (!build) throw new Error(`${spec.id}: unknown tool ${call.name}`);
-      paths.add(build(call.arguments));
+      const tool = toolByName.get(call.name);
+      if (!tool) throw new Error(`${spec.id}: unknown tool ${call.name}`);
+      paths.add(tool.path(call.arguments));
+      for (const path of Object.values(tool.related?.(call.arguments) ?? {})) paths.add(path);
     }
   }
 }

@@ -68,10 +68,39 @@ const byFinish = (a, b) => (a.finish ?? 999) - (b.finish ?? 999) || a.code.local
 // ── Tyre strategy (/stints) ─────────────────────────────────────────────
 
 /**
+ * Stint boundaries the official pit-stop summary does not account for: each
+ * official stop covers at most one boundary, on its in-lap (stint end) first,
+ * else give or take a lap or on the out-lap (next stint start). The laps returned are the
+ * stint ends left uncovered: a tyre change under a red flag, a stop missing
+ * from the summary, or a source disagreement. Never counted as a pit stop.
+ */
+function uncoveredStintChanges(stints, official) {
+  const unused = [...official];
+  const boundaries = stints.slice(0, -1).map((stint, index) => ({ end: stint.end, nextStart: stints[index + 1].start, covered: false }));
+  // Exact in-lap matches first, so a stop is not taken by the boundary before it.
+  const passes = [
+    (stop, boundary) => stop.lap === boundary.end,
+    (stop, boundary) => stop.lap >= boundary.end - 1 && stop.lap <= Math.max(boundary.end + 1, boundary.nextStart),
+  ];
+  for (const fits of passes) {
+    for (const boundary of boundaries) {
+      if (boundary.covered) continue;
+      const match = unused.findIndex((stop) => fits(stop, boundary));
+      if (match >= 0) {
+        unused.splice(match, 1);
+        boundary.covered = true;
+      }
+    }
+  }
+  return boundaries.filter((boundary) => !boundary.covered).map((boundary) => boundary.end);
+}
+
+/**
  * Rows of the strategy chart, ordered by finishing position (official
  * classification when given, unclassified drivers last). Pit stops come from
- * the official pit-stop summary when it lists the driver; otherwise the lap a
- * stint ends before another starts is marked as a stint change (`derived`).
+ * the official pit-stop summary; every stint boundary that summary does not
+ * cover is added as a stint change (`derived`), even when the driver has
+ * other official stops.
  *
  * @returns {{ availability: string|null, reason: string|null, raceLaps: number|null, maxLap: number, rows: object[] }}
  */
@@ -98,9 +127,10 @@ export function buildTyreStrategy(data, results = [], pitStops = []) {
         ageAtStart: isInt(stint.tyre_age_at_start) && stint.tyre_age_at_start >= 0 ? stint.tyre_age_at_start : null,
       }));
     const official = (stopsByCode.get(code) ?? []).sort((a, b) => a.lap - b.lap);
-    const stops = official.length
-      ? official.map((stop) => ({ ...stop, derived: false }))
-      : stints.slice(1).map((stint, index) => ({ lap: stints[index].end, durationMs: null, derived: true }));
+    const stops = [
+      ...official.map((stop) => ({ ...stop, derived: false })),
+      ...uncoveredStintChanges(stints, official).map((lap) => ({ lap, durationMs: null, derived: true })),
+    ].sort((a, b) => a.lap - b.lap || Number(a.derived) - Number(b.derived));
     return {
       driverId: isInt(driver.driver_id) ? driver.driver_id : null,
       code,
@@ -114,6 +144,48 @@ export function buildTyreStrategy(data, results = [], pitStops = []) {
   const raceLaps = isInt(data?.race_laps) && data.race_laps > 0 ? data.race_laps : null;
   const maxLap = Math.max(raceLaps ?? 0, ...rows.flatMap((row) => row.stints.map((stint) => stint.end)), 1);
   return { availability, reason, raceLaps, maxLap, rows };
+}
+
+/** Official pit stops of a row (stint changes outside the summary excluded). */
+export function officialStops(row) {
+  return (row?.stops ?? []).filter((stop) => !stop.derived);
+}
+
+/** Stint changes of a row that the official pit-stop summary does not list. */
+export function stintChangesOutsideSummary(row) {
+  return (row?.stops ?? []).filter((stop) => stop.derived);
+}
+
+/**
+ * Strategy rows of the official top `count` (P1 to P`count` of the
+ * classification, in that order; never a lower finisher filling a gap). A
+ * finisher without published stints keeps their place as a row with no
+ * stint and `missing: true`, so the card shows it explicitly.
+ *
+ * @returns {{ rows: object[], missing: object[] }}
+ */
+export function topFinisherStrategy(strategy, results = [], count = 10) {
+  const seen = new Set();
+  const official = (Array.isArray(results) ? results : [])
+    .filter((result) => isInt(result?.position) && result.position >= 1 && result.position <= count)
+    .sort((a, b) => a.position - b.position)
+    .filter((result) => (seen.has(result.position) ? false : (seen.add(result.position), true)));
+  const rows = official.map((result) => {
+    const code = text(result.driver_code)?.toUpperCase() ?? null;
+    const row = (strategy?.rows ?? []).find((candidate) => (isInt(result.driver_id) && candidate.driverId === result.driver_id) || (code && candidate.code === code));
+    if (row) return { ...row, finish: result.position, missing: false };
+    return {
+      driverId: isInt(result.driver_id) ? result.driver_id : null,
+      code: code ?? "—",
+      name: fullName(result),
+      team: text(result.team_name) ?? "",
+      finish: result.position,
+      stints: [],
+      stops: [],
+      missing: true,
+    };
+  });
+  return { rows, missing: rows.filter((row) => row.missing) };
 }
 
 /** "M–H" (or "S–M–S") for one row: the compound letters in stint order. */
@@ -174,42 +246,85 @@ export function orderAtLap(series, lap) {
 // ── Biggest climb ───────────────────────────────────────────────────────
 
 /**
+ * A driver's positions are complete when the start (lap 0 or the grid) and
+ * every lap from 1 to their last lap are published. The last lap is the
+ * official laps completed, capped at the race distance of the payload.
+ */
+function hasCompletePositions(driver, result, raceLaps) {
+  const officialLaps = isInt(result?.laps) && result.laps > 0 ? result.laps : null;
+  const last = officialLaps != null && raceLaps != null ? Math.min(officialLaps, raceLaps) : officialLaps ?? raceLaps;
+  if (last == null) return false;
+  const laps = new Set(driver.points.map((point) => point.lap));
+  if (!laps.has(0) && driver.grid == null) return false;
+  for (let lap = 1; lap <= last; lap += 1) if (!laps.has(lap)) return false;
+  return true;
+}
+
+function climbOf(driver) {
+  const start = driver.points.find((point) => point.lap === 0)?.position ?? driver.grid;
+  const running = driver.points.filter((point) => point.lap >= 1);
+  const worst = running.reduce((low, point) => (point.position > low.position ? point : low), running[0]);
+  const lowest = start != null && start >= worst.position ? { position: start, lap: 0 } : worst;
+  return { driver, lowest, climb: lowest.position - driver.finish };
+}
+
+/**
  * Largest recovery of the race: for each classified driver, the lowest
  * position held from the start (grid, lap 0, included) to the flag, minus the
- * finishing position. Computed from lap-by-lap positions when they are
- * published; otherwise falls back to grid → finish from the official
- * classification (same rule as the "Biggest gain" figure), and says so.
+ * finishing position.
  *
- * @returns {{ state: "ok", value: string, detail: string, basis: "positions"|"grid", code?: string|null } | { state: "unavailable", reason: string }}
+ * - `basis: "positions"`: every classified driver has complete lap-by-lap
+ *   positions and the payload is not partial, so the maximum is the race's.
+ * - `basis: "positions-partial"`: only some drivers are covered; the figure
+ *   is restricted to them and `scope` says so ("among N of M …"). It is never
+ *   presented as the race maximum.
+ * - `basis: "grid"`: no driver is covered (positions missing, unavailable or
+ *   incomplete); grid → finish from the official classification, labelled.
+ *
+ * `scope` is the label to show next to the value.
+ *
+ * @returns {{ state: "ok", value: string, detail: string, basis: "positions"|"positions-partial"|"grid", scope: string, code?: string|null } | { state: "unavailable", reason: string }}
  */
 export function biggestClimbFigure(positionsData, results = []) {
   const series = positionsData ? buildPositionSeries(positionsData, results) : null;
-  const usable = series && series.availability !== "unavailable"
-    ? series.drivers.filter((driver) => driver.finish != null && driver.points.some((point) => point.lap >= 1))
+  const published = series != null && series.availability !== "unavailable" && series.drivers.some((driver) => driver.points.some((point) => point.lap >= 1));
+  const classifiedCount = Math.max(
+    (Array.isArray(results) ? results : []).filter((result) => isInt(result?.position) && result.position >= 1).length,
+    series ? series.drivers.filter((driver) => driver.finish != null).length : 0,
+  );
+  const covered = published
+    ? series.drivers.filter((driver) => driver.finish != null && driver.points.some((point) => point.lap >= 1) && hasCompletePositions(driver, resultFor(results, driver), series.raceLaps))
     : [];
-  if (usable.length) {
-    const climbs = usable.map((driver) => {
-      const start = driver.points.find((point) => point.lap === 0)?.position ?? driver.grid;
-      const running = driver.points.filter((point) => point.lap >= 1);
-      const worst = running.reduce((low, point) => (point.position > low.position ? point : low), running[0]);
-      const lowest = start != null && start >= worst.position ? { position: start, lap: 0 } : worst;
-      return { driver, lowest, climb: lowest.position - driver.finish };
-    }).sort((a, b) => b.climb - a.climb || a.driver.finish - b.driver.finish);
+  const whole = covered.length > 0 && covered.length >= classifiedCount && series.availability !== "partial";
+
+  if (covered.length) {
+    const basis = whole ? "positions" : "positions-partial";
+    const scope = whole
+      ? "from lap-by-lap positions"
+      : `among the ${covered.length} of ${classifiedCount} classified drivers with complete lap positions${series.availability === "partial" && series.reason ? ` (partial data: ${series.reason})` : ""}`;
+    const climbs = covered.map(climbOf).sort((a, b) => b.climb - a.climb || a.driver.finish - b.driver.finish);
     const best = climbs[0];
-    if (best.climb <= 0) return { state: "ok", value: "0", detail: "No driver recovered a place during the race", basis: "positions" };
+    if (best.climb <= 0) {
+      return { state: "ok", value: "0", detail: whole ? "No driver recovered a place during the race" : "None of these drivers recovered a place", basis, scope };
+    }
     const tied = climbs.filter((entry) => entry.climb === best.climb);
     if (tied.length > 1) {
-      return { state: "ok", value: `+${best.climb}`, detail: `Tied: ${naturalList(tied.map((entry) => entry.driver.name))}`, basis: "positions" };
+      return { state: "ok", value: `+${best.climb}`, detail: `Tied: ${naturalList(tied.map((entry) => entry.driver.name))}`, basis, scope };
     }
     const from = best.lowest.lap === 0 ? `P${best.lowest.position} on the grid` : `P${best.lowest.position} on lap ${best.lowest.lap}`;
-    return { state: "ok", value: `+${best.climb}`, detail: `${best.driver.name}, ${from} to P${best.driver.finish}`, basis: "positions", code: best.driver.code };
+    return { state: "ok", value: `+${best.climb}`, detail: `${best.driver.name}, ${from} to P${best.driver.finish}`, basis, scope, code: best.driver.code };
   }
 
+  const scope = published
+    ? "grid to finish (official classification); lap-by-lap positions are incomplete"
+    : "grid to finish; lap-by-lap positions not published yet";
   const gains = rankPositionGains(results);
   const top = gains[0];
-  if (!top) return { state: "unavailable", reason: "Lap-by-lap positions are not published and no classified result has a grid position." };
-  if (top.gained <= 0) return { state: "ok", value: "0", detail: "No driver gained a place from the grid", basis: "grid" };
+  if (!top) {
+    return { state: "unavailable", reason: published ? "Lap-by-lap positions are incomplete and no classified result has a grid position." : "Lap-by-lap positions are not published and no classified result has a grid position." };
+  }
+  if (top.gained <= 0) return { state: "ok", value: "0", detail: "No driver gained a place from the grid", basis: "grid", scope };
   const tied = gains.filter((row) => row.gained === top.gained);
   const who = tied.length > 1 ? `Tied: ${naturalList(tied.map(fullName))}` : `${fullName(top)}, P${top.grid} to P${top.position}`;
-  return { state: "ok", value: `+${top.gained}`, detail: who, basis: "grid", code: tied.length > 1 ? null : top.driver_code ?? null };
+  return { state: "ok", value: `+${top.gained}`, detail: who, basis: "grid", scope, code: tied.length > 1 ? null : top.driver_code ?? null };
 }

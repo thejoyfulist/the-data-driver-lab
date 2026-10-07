@@ -85,6 +85,9 @@ test("catalogue: every tool reads a GET path the proxy allows (no write tool)", 
     if (PROXY_PENDING.has(tool.name) && !allowed) assert.match(path, PROXY_PENDING.get(tool.name));
     else assert.equal(allowed, true, `${tool.name}: ${path}`);
     assert.equal(isAllowedProxyPath("POST", path.slice(1).split("/")), false);
+    for (const related of Object.values(tool.related?.(input) ?? {})) {
+      assert.equal(isAllowedProxyPath("GET", related.slice(1).split("/")), true, `${tool.name} companion: ${related}`);
+    }
   }
 });
 
@@ -258,7 +261,14 @@ const positionsPayload = {
 };
 
 test("catalogue: f1_stints is bounded, sourced and keeps the contract's fields", async () => {
-  const runner = runnerFor({ "/v1/f1/races/2026/17/stints": ok(stintsPayload, openf1Meta) });
+  const runner = runnerFor({
+    "/v1/f1/races/2026/17/stints": ok(stintsPayload, openf1Meta),
+    "/v1/f1/races/2026/17/pitstops": ok([
+      { stop: 1, lap: 20, duration_ms: 22_100, driver_code: "DAA" },
+      { stop: 2, lap: 40, duration_ms: 21_900, driver_code: "DAA" },
+      { stop: 1, lap: 20, duration_ms: 23_000, driver_code: "DAB" },
+    ], { source: "formula1.com" }),
+  });
   const result = await runner.call("f1_stints", { season: 2026, api_round: 17 });
   assert.equal(result.ok, true);
   assert.equal(result.availability, "complete");
@@ -266,7 +276,14 @@ test("catalogue: f1_stints is bounded, sourced and keeps the contract's fields",
   assert.equal(result.data.drivers.length, 10);
   assert.deepEqual(result.truncated, { shown: 10, total: 22 });
   assert.equal(result.data.drivers[0].sequence, "MEDIUM-HARD-SOFT");
-  assert.equal(result.data.drivers[0].stops, 2);
+  // Stint changes come from /stints; pit stops only from the official summary.
+  assert.equal(result.data.drivers[0].stint_changes, 2);
+  assert.equal(result.data.drivers[0].pit_stops, 2);
+  assert.equal(result.data.drivers[1].stint_changes, 2);
+  assert.equal(result.data.drivers[1].pit_stops, 1, "two stint changes, one official stop: never reported as two stops");
+  assert.equal(result.data.drivers[2].pit_stops, 0);
+  assert.equal("stops" in result.data.drivers[0], false);
+  assert.equal(result.data.pit_stops_source, "formula1.com pit-stop summary (/pitstops)");
   assert.deepEqual(result.data.drivers[0].stints[1], { stint: 2, compound: "HARD", start_lap: 21, end_lap: 40, laps: 20, tyre_age_at_start: 3 });
   assert.equal(result.source.kind, "openf1_enrichment");
   assert.equal(result.source.licence, "CC BY-NC-SA 4.0");
@@ -313,6 +330,14 @@ test("catalogue: f1_stints and f1_positions report a missing endpoint and an unp
   });
   const missing = await runner.call("f1_stints", { season: 2026, api_round: 18 });
   assert.equal(missing.ok, false);
+  // Stints published, pit-stop summary down: pit_stops stays null, never stint_changes.
+  const noSummary = await runnerFor({
+    "/v1/f1/races/2026/17/stints": ok({ ...stintsPayload, drivers: stintsPayload.drivers.slice(0, 1) }, openf1Meta),
+  }).call("f1_stints", { season: 2026, api_round: 17 });
+  assert.equal(noSummary.ok, true);
+  assert.equal(noSummary.data.drivers[0].stint_changes, 2);
+  assert.equal(noSummary.data.drivers[0].pit_stops, null);
+  assert.match(noSummary.data.pit_stops_source, /^Official pit-stop summary unavailable \(HTTP 404\)/);
   assert.equal(missing.error.status, 404);
   assert.equal(missing.source.kind, "openf1_enrichment");
   assert.equal(missing.source.licence, "CC BY-NC-SA 4.0");
