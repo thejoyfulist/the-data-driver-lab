@@ -73,7 +73,9 @@ test('MCP HTTP response supports CORS and JSON under site CSP', async () => {
   const rpc = await handleMcpRequest(req, { fetchJson });
   assert.equal(rpc.status, 200);
   assert.match(rpc.headers.get('content-type'), /application\/json/);
-  assert.equal((await rpc.json()).result.serverInfo.name, 'The Data Driver — F1 data');
+  const initialized = await rpc.json();
+  assert.equal(initialized.result.serverInfo.name, 'The Data Driver — F1 data');
+  assert.equal(initialized.result.capabilities.tools.listChanged, false);
 });
 
 
@@ -81,7 +83,52 @@ test('request bytes and per-IP rate limit are bounded', async () => {
   const large = await handleMcpRequest(new Request('http://localhost/api/mcp', { method: 'POST', body: 'x'.repeat(8_193) }));
   assert.equal(large.status, 413);
   const ip = `test-${Math.random()}`;
-  for (let i = 0; i < 60; i += 1) assert.equal(allowMcpRequest(ip, 1_000), true);
+  for (let i = 0; i < 300; i += 1) assert.equal(allowMcpRequest(ip, 1_000), true);
   assert.equal(allowMcpRequest(ip, 1_000), false);
   assert.equal(allowMcpRequest(ip, 61_001), true);
+});
+
+test('GET/DELETE reject streams, batches reject tool fan-out, and errors use JSON-RPC', async () => {
+  for (const method of ['GET', 'DELETE']) {
+    const response = await handleMcpRequest(new Request('http://localhost/api/mcp', { method, headers: { Accept: 'text/event-stream' } }));
+    assert.equal(response.status, 405);
+    assert.equal(response.headers.get('allow'), 'POST, OPTIONS');
+  }
+  const batch = await handleMcpRequest(new Request('http://localhost/api/mcp', { method: 'POST', body: JSON.stringify([{ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'f1_calendar', arguments: { season: 2026 } } }]) }), { fetchJson: () => { throw new Error('batch reached upstream'); } });
+  assert.equal(batch.status, 400);
+  assert.equal((await batch.json()).error.code, -32600);
+  const large = await handleMcpRequest(new Request('http://localhost/api/mcp', { method: 'POST', body: 'x'.repeat(8_193) }));
+  assert.equal((await large.json()).jsonrpc, '2.0');
+  const ip = `socket-${Math.random()}`;
+  for (let i = 0; i < 300; i += 1) assert.equal(allowMcpRequest(ip), true);
+  const limitedRequest = new Request('http://localhost/api/mcp', { method: 'POST', headers: { 'x-vercel-forwarded-for': 'forged' }, body: '{}' });
+  limitedRequest.socket = { remoteAddress: ip };
+  const limited = await handleMcpRequest(limitedRequest);
+  assert.equal(limited.status, 429);
+  assert.equal((await limited.json()).jsonrpc, '2.0');
+});
+
+test('search and fetch report upstream failure as tool errors without leaking details', async () => {
+  const fail = async () => ({ status: 503, body: { status: 'error', detail: 'secret database hostname' } });
+  const client = new Client({ name: 'outage-test', version: '1' });
+  await client.connect(new StreamableHTTPClientTransport(new URL('http://localhost/api/mcp'), { fetch: (input, init) => handleMcpRequest(new Request(input, init), { fetchJson: fail }) }));
+  try {
+    for (const call of [{ name: 'search', arguments: { query: 'Australian Grand Prix 2026' } }, { name: 'fetch', arguments: { id: 'race:2026:1' } }]) {
+      const value = await client.callTool(call);
+      assert.equal(value.isError, true);
+      assert.equal(value.structuredContent.error.status, 503);
+      assert.match(value.content[0].text, /Upstream API unavailable/);
+      assert.doesNotMatch(value.content[0].text, /secret database hostname/);
+    }
+  } finally { await client.close(); }
+  const missing = new Client({ name: 'missing-test', version: '1' });
+  await missing.connect(new StreamableHTTPClientTransport(new URL('http://localhost/api/mcp'), { fetch: (input, init) => handleMcpRequest(new Request(input, init), { fetchJson: async () => ({ status: 404, body: { status: 'error', detail: 'Not found.' } }) }) }));
+  try {
+    const search = await missing.callTool({ name: 'search', arguments: { query: 'Nothing 2099' } });
+    assert.equal(search.isError, undefined);
+    assert.deepEqual(search.structuredContent.results, []);
+    const fetched = await missing.callTool({ name: 'fetch', arguments: { id: 'race:2099:1' } });
+    assert.equal(fetched.isError, true);
+    assert.equal(fetched.structuredContent.error, 'Document not found.');
+  } finally { await missing.close(); }
 });

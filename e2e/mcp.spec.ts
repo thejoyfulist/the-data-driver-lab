@@ -27,3 +27,26 @@ test('the Next route serves MCP under the site CSP', async ({ request }) => {
   expect(initialize.headers()['content-security-policy']).toContain("default-src 'self'");
   expect(initialize.headers()['content-type']).toContain('application/json');
 });
+
+test('production route rejects streams and batches, and reports upstream outages', async ({ request }) => {
+  for (const method of ['GET', 'DELETE']) {
+    const response = await request.fetch(`${base}/api/mcp`, { method, headers: { Accept: 'text/event-stream' } });
+    expect(response.status()).toBe(405);
+    expect(response.headers().allow).toBe('POST, OPTIONS');
+  }
+  const batch = await request.post(`${base}/api/mcp`, { data: [{ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'f1_calendar', arguments: { season: 2026 } } }], headers: { Accept: 'application/json, text/event-stream' } });
+  expect(batch.status()).toBe(400);
+  expect((await batch.json()).error.code).toBe(-32600);
+  const client = new Client({ name: 'outage-route-test', version: '1' });
+  await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/api/mcp`)));
+  try {
+    for (const call of [{ name: 'search', arguments: { query: 'Australian Grand Prix 2098' } }, { name: 'fetch', arguments: { id: 'race:2098:1' } }]) {
+      const value = await client.callTool(call);
+      expect(value.isError).toBe(true);
+      expect((value.structuredContent as { error?: { message?: string } })?.error?.message).toBe('Upstream API unavailable.');
+    }
+  } finally { await client.close(); }
+  const proxy = await request.get(`${base}/api/f1/v1/f1/calendar/2098`);
+  expect(proxy.status()).toBe(503);
+  expect((await proxy.json()).detail).toBe('Upstream API unavailable.');
+});

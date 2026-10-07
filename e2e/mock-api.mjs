@@ -281,6 +281,8 @@ for (const [stalePath, sourcePath] of [
 // Endpoints that fail upstream, to check that the Lab reports an outage
 // instead of an absence of events.
 const errorRoutes = new Map([
+  ["/v1/f1/calendar/2098", 503],
+  ["/v1/f1/standings/drivers/2098", 503],
   ["/v1/f1/races/2026/13/practice/FP3/best", 503],
   ["/v1/f1/races/2025/13/safety-cars", 503],
 ]);

@@ -562,7 +562,7 @@ export function createF1ToolRunner({ fetchJson, publicOrigin = DEFAULT_PUBLIC_AP
     const { status, body } = await load(path);
     const envelope = body && typeof body === "object" ? body : {};
     if (status < 200 || status >= 300 || envelope.status === "error") {
-      const message = text(envelope.error?.message) ?? text(envelope.detail) ?? `The API answered ${status}.`;
+      const message = status >= 500 ? "Upstream API unavailable." : text(envelope.error?.message) ?? text(envelope.detail) ?? `The API answered ${status}.`;
       return fitResult({ tool: name, ok: false, error: { status, message }, source: describeProvenance(null, tool.kind, apiUrl) });
     }
     const meta = envelope.meta ?? null;

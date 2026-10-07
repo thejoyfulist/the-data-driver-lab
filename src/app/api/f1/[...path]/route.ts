@@ -47,6 +47,7 @@ async function proxy(request: NextRequest, path: string[]) {
   }
 
   const responseHeaders = new Headers();
+  if (response.status >= 500) return jsonError(response.status, "Upstream API unavailable.");
   const responseContentType = response.headers.get("content-type");
   if (responseContentType) responseHeaders.set("content-type", responseContentType);
 

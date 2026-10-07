@@ -8,6 +8,8 @@ https://thedatadriver.app/api/mcp
 
 No account or key is required. The server offers 19 F1 tools plus `search` and `fetch`. Each F1 response includes its public API URL, source, licence, and any published availability reason. `search` returns IDs for published races and drivers; `fetch` returns a citable document for an ID. Responses are bounded, so a truncated list is marked as such.
 
+The hosted endpoint uses stateless Streamable HTTP with POST and OPTIONS. GET event streams and DELETE session requests return 405 because this server does not offer SSE or persistent sessions.
+
 ## Claude
 
 For an individual Claude Pro or Max account, open **Customize → Connectors → + Add → Add custom connector**. Enter the URL above and choose **No sign in**. On Team and Enterprise plans, an owner adds it first in **Organization settings → Connectors → Add → Custom → Web**; members can then enable it. See [Claude’s current connector guide](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp). In Claude Code, add the hosted server with:
@@ -42,4 +44,4 @@ In ChatGPT, enable **Developer mode**, then open **Settings → Apps → Create*
 
 ## Limits and licences
 
-The service is read-only, public and rate limited. A single call can return a shortened result; use a narrower query if needed. Upstream data can be unavailable or late, and the server does not fill gaps. Official results and standings are taken from official sources through the public API. Historical OpenF1 enrichment is non-official, attributed to [OpenF1](https://openf1.org/) and subject to [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/), including its non-commercial terms. Cite the `source.api_url` or the `fetch` URL in answers. No OAuth or write tools are offered.
+The service is read-only and public. In-memory limits of 300 requests per minute per client IP and 3,000 per minute per instance are best effort: they are not shared across Vercel instances, and platform clients may share outgoing IPs. JSON-RPC batches are rejected. A single call can return a shortened result; use a narrower query if needed. Upstream data can be unavailable or late, and the server does not fill gaps. Official results and standings are taken from official sources through the public API. Historical OpenF1 enrichment is non-official, attributed to [OpenF1](https://openf1.org/) and subject to [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/), including its non-commercial terms. Cite the `source.api_url` or the `fetch` URL in answers. No OAuth or write tools are offered.

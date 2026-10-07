@@ -81,14 +81,17 @@ test("⌘K palette opens, filters and navigates to a race", async ({ page }) => 
   await page.keyboard.press("ControlOrMeta+k");
   const dialog = page.getByRole("dialog", { name: "Command palette" });
   await expect(dialog).toBeVisible();
-  await page.keyboard.type("r12 fixture");
+  await dialog.getByRole("combobox").fill("r12 fixture");
   await expect(dialog.getByRole("option").first()).toContainText("R12");
   await page.keyboard.press("Enter");
   await expect(dialog).toBeHidden();
   await expect(page.getByLabel("Race", { exact: true })).toHaveValue("14");
 
+  await revealView(page, "lab-strategy");
+  await page.locator("#lab-field").scrollIntoViewIfNeeded();
   await page.keyboard.press("ControlOrMeta+k");
-  await page.keyboard.type("strategy");
+  await dialog.getByRole("combobox").fill("stints");
+  await expect(dialog.getByRole("option").first()).toContainText("Strategy");
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "Pit stops and stints" })).toBeFocused();
 

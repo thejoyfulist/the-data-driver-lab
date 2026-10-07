@@ -5,6 +5,7 @@ test("Data Lab resolves nominal race data and preserves provenance", async ({ pa
   page.on("pageerror", (error) => runtimeErrors.push(error.message));
 
   await page.goto("/");
+  await expect(page.locator("[data-lab-hydrated=true]")).toHaveCount(1, { timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Work with the race data." })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Loading race data" })).toBeHidden({ timeout: 10_000 });
   await expect(page.getByText("Live data unavailable")).toHaveCount(0);
@@ -37,6 +38,7 @@ test("Data Lab names the race instead of printing an internal round when officia
   page.on("pageerror", (error) => runtimeErrors.push(error.message));
 
   await page.goto("/?season=2025&round=13");
+  await expect(page.locator("[data-lab-hydrated=true]")).toHaveCount(1, { timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Loading race data" })).toBeHidden({ timeout: 10_000 });
 
   const provenance = page.getByText("PROVENANCE").locator("..");
@@ -53,6 +55,7 @@ test("Data Lab shows no round number when official_round is present but uncertif
   // Fixture 2024 mirrors production on 2026-09-23: official_round is present
   // (stale R10 for internal 13) but meta.official_round_basis is absent.
   await page.goto("/?season=2024&round=13");
+  await expect(page.locator("[data-lab-hydrated=true]")).toHaveCount(1, { timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Loading race data" })).toBeHidden({ timeout: 10_000 });
 
   const provenance = page.getByText("PROVENANCE").locator("..");

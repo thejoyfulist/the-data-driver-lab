@@ -191,7 +191,7 @@ test("catalogue: one long text field cannot exceed the cap", async () => {
   const error = await runnerFor({ "/v1/f1/calendar/2026": { status: 502, body: { status: "error", error: { message: "z".repeat(20_000) } } } }).call("f1_calendar", { season: 2026 });
   assert.equal(error.ok, false);
   assert.ok(JSON.stringify(error).length <= MAX_RESULT_CHARS);
-  assert.ok(error.error.message.endsWith(TEXT_TRUNCATION_MARK));
+  assert.equal(error.error.message, "Upstream API unavailable.");
 
   const wide = { tool: "x", ok: true, data: { one: Object.fromEntries(Array.from({ length: 500 }, (_, index) => [`k${index}`, `value ${index}`])) } };
   const squeezed = fitResult(wide, 1_000);
