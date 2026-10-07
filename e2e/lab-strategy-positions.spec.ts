@@ -67,7 +67,9 @@ test("strategy: stints coloured by compound, with a pattern and a letter, in fin
   await expect(legend).toContainText("Soft");
   await expect(legend).toContainText("Medium");
   await expect(legend).toContainText("Hard");
-  await expect(legend).toContainText("Stint change (stop not in the pit-stop summary)");
+  await expect(legend).toContainText("Stint change not in the official pit summary");
+  // The dashed change is not counted as a stop.
+  await expect(view.locator("[data-strategy-row=HAM]")).toHaveAttribute("aria-label", /no official pit stop; 1 stint change after lap 30 not in the official pit summary$/);
   await expect(view).toContainText("CC BY-NC-SA 4.0");
 
   // Table and export carry the compound and the tyre age.
@@ -195,10 +197,50 @@ test("race report: strategy at a glance and the positions line", async ({ page }
   const line = report.locator("[data-positions-line]");
   await expect(line.locator("[data-climb-value]")).toHaveText("+4");
   await expect(line.locator("[data-climb-detail]")).toHaveText("Lewis Hamilton, P9 on lap 3 to P5");
-  await expect(line.locator("[data-climb-basis]")).toContainText("from lap-by-lap positions");
+  // Verstappen has no position on lap 30: the maximum is restricted to the
+  // drivers with every lap published, and says so.
+  await expect(line.locator("[data-climb-basis]")).toHaveAttribute("data-climb-basis", "positions-partial");
+  await expect(line.locator("[data-climb-basis]")).toContainText("among the 4 of 5 classified drivers with complete lap positions");
   await line.getByRole("button", { name: "Positions lap by lap →" }).click();
   await expect(page).toHaveURL(/[?&]view=positions\b/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Positions lap by lap");
+});
+
+test("partial data: official top 10 kept, stint changes outside the summary marked, climb restricted", async ({ page }) => {
+  await forwardLotH(page);
+  const errors = await openLab(page, "/?season=2024&round=13");
+  const report = page.locator("#lab-report");
+  const card = report.locator("#lab-report-strategy");
+  // /stints omits Piastri (P2): the card keeps P1–P5 of the classification, never a lower finisher.
+  await expect(card.locator("[data-strategy-row]")).toHaveCount(5);
+  expect(await card.locator("[data-strategy-row]").evaluateAll((rows) => rows.map((row) => row.getAttribute("data-strategy-row")))).toEqual(["NOR", "PIA", "VER", "RUS", "HAM"]);
+  await expect(card.locator("[data-strategy-row=PIA] [data-stints-missing]")).toHaveText("Stints not published");
+  await expect(card.locator("[data-strategy-missing]")).toContainText("No stints published for P2 Oscar Piastri");
+  await expect(card.locator("[data-partial]")).toContainText("Stints are missing for one driver.");
+  // Russell: two official stops and one stint change the official summary does not list.
+  await expect(card.locator("[data-strategy-row=RUS] [data-stop=official]")).toHaveCount(2);
+  await expect(card.locator("[data-strategy-row=RUS] [data-stop=derived]")).toHaveCount(1);
+  await expect(card.locator("[data-legend-derived]")).toHaveText("Stint change not in the official pit summary");
+  // Verstappen's laps 1–3 are missing: no race-wide maximum.
+  const basis = report.locator("[data-positions-line] [data-climb-basis]");
+  await expect(basis).toHaveAttribute("data-climb-basis", "positions-partial");
+  await expect(basis).toContainText("among the 4 of 5 classified drivers with complete lap positions (partial data: No running order on laps 1–3 for one driver.)");
+
+  await nav(page).getByRole("link", { name: "Strategy", exact: true }).click();
+  const view = page.locator("#lab-strategy");
+  await expect(view.locator("[data-strategy-row=RUS]")).toHaveAttribute("aria-label", /2 official pit stops on lap 18, 40; 1 stint change after lap 50 not in the official pit summary$/);
+  await expect(view.locator("[data-strategy-row=RUS]")).toContainText("2 stops");
+  // Overlapping stints: the official stop still covers the boundary.
+  await expect(view.locator("[data-strategy-row=VER] [data-stop=official]")).toHaveCount(1);
+  await expect(view.locator("[data-strategy-row=VER] [data-stop=derived]")).toHaveCount(0);
+  await expect(view.locator("[data-strategy-row=PIA]")).toHaveCount(0);
+
+  await nav(page).getByRole("link", { name: "Positions", exact: true }).click();
+  const positions = page.locator("#lab-positions");
+  await expect(positions.locator("[data-partial]")).toContainText("No running order on laps 1–3 for one driver.");
+  await expect(positions.locator("[data-biggest-climb]")).toContainText("+4 · Lewis Hamilton, P9 on lap 3 to P5");
+  await expect(positions.locator("[data-biggest-climb] [data-climb-basis]")).toContainText("among the 4 of 5 classified drivers");
+  expect(errors).toEqual([]);
 });
 
 test("not published yet: a 404 endpoint (current proxy) and an API 'unavailable' are explicit states", async ({ page }) => {

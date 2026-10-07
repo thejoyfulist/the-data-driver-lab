@@ -261,6 +261,33 @@ for (const row of routes.get("/v1/f1/races/2026/13/positions").data.drivers) {
     throw new Error(`fixture positions of ${row.driver_code} disagree with the classification`);
   }
 }
+// Partial lot H data as the engine (lot H1) can publish it, on the 2024
+// fixture race (same classification and pit stops as 2026/13):
+// - /stints omits Piastri (P2): the top-10 card keeps P2 and says so;
+// - Verstappen's stints overlap (laps 23–24 in both), as merged sources can;
+// - Russell has a fourth stint after lap 50 with no stop in the official
+//   summary, next to his two official stops;
+// - /positions misses Verstappen's laps 1–3 (no running order at the start).
+routes.set("/v1/f1/races/2024/13/stints", withMeta(envelope({
+  availability: "partial",
+  reason: "Stints are missing for one driver.",
+  race_laps: 57,
+  drivers: [
+    { ...fixtureIdentity(4), stints: [stint(1, "MEDIUM", 1, 22, 0), stint(2, "HARD", 23, 57, 0)] },
+    { ...fixtureIdentity(1), stints: [stint(1, "MEDIUM", 1, 24, 0), stint(2, "HARD", 23, 57, 2)] },
+    { ...fixtureIdentity(63), stints: [stint(1, "SOFT", 1, 18, 0), stint(2, "MEDIUM", 19, 40, 3), stint(3, "SOFT", 41, 50, 4), stint(4, "SOFT", 51, 57, 9)] },
+    { ...fixtureIdentity(44), stints: [stint(1, "HARD", 1, 30, 0), stint(2, "MEDIUM", 31, 57, 0)] },
+  ],
+}), openf1Meta));
+routes.set("/v1/f1/races/2024/13/positions", withMeta(envelope({
+  ...routes.get("/v1/f1/races/2026/13/positions").data,
+  availability: "partial",
+  reason: "No running order on laps 1–3 for one driver.",
+  drivers: routes.get("/v1/f1/races/2026/13/positions").data.drivers.map((row) => (row.driver_id === 1
+    ? { ...row, positions: row.positions.filter((point) => point.lap === 0 || point.lap > 3) }
+    : row)),
+}), openf1Meta));
+routes.set("/v1/f1/races/2024/13/pitstops", routes.get("/v1/f1/races/2026/13/pitstops"));
 routes.set("/v1/f1/races/2026/13/fastest-laps", envelope({
   year: 2026,
   round: 13,
