@@ -84,6 +84,8 @@ export interface TyreStrategyRow {
   stints: TyreStint[];
   /** Official stops (`derived: false`) and stint changes the official summary does not list (`derived: true`). */
   stops: { lap: number; durationMs: number | null; derived: boolean }[];
+  /** False when /pitstops is empty or unavailable; zero official stops is then unknown. */
+  pitSummaryPublished: boolean;
   /** Official top-10 row whose stints are not published. */
   missing?: boolean;
 }
@@ -93,6 +95,7 @@ export interface TyreStrategy {
   reason: string | null;
   raceLaps: number | null;
   maxLap: number;
+  pitSummaryPublished: boolean;
   rows: TyreStrategyRow[];
 }
 

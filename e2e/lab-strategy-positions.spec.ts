@@ -91,6 +91,32 @@ test("strategy: stints coloured by compound, with a pattern and a letter, in fin
   expect(errors).toEqual([]);
 });
 
+test("strategy: an unpublished pit summary shows unknown stops and separate stint changes in the view and export", async ({ page }) => {
+  await forwardLotH(page);
+  await page.route(/\/api\/f1\/v1\/f1\/races\/2024\/13\/pitstops$/, (route) => route.fulfill({
+    status: 200, contentType: "application/json", body: JSON.stringify({ status: "ok", data: [], meta: { source: "formula1.com" } }),
+  }));
+  await openLab(page, "/?view=strategy&season=2024&round=13");
+  const view = page.locator("#lab-strategy");
+  await expect(view.locator("[data-view-scope]")).toContainText("— pit stops · Official pit summary not published");
+  const russell = view.locator("[data-strategy-row=RUS]");
+  await expect(russell.locator("[data-stop-count]")).toHaveText("—");
+  await expect(russell.locator("[data-stop-count]")).toHaveAttribute("title", "Official pit summary not published");
+  await expect(russell.locator("[data-stint-change-count]")).toHaveText("3 stint changes");
+  await expect(russell).toHaveAttribute("aria-label", /official pit summary not published; 3 stint changes/);
+  await view.getByRole("button", { name: "More actions for Tyre strategy" }).click();
+  const download = page.waitForEvent("download");
+  await page.getByRole("menuitem", { name: /CSV/ }).click();
+  const stream = await (await download).createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(chunk as Buffer);
+  const csv = Buffer.concat(chunks).toString("utf8");
+  expect(csv).toContain("pit_stops");
+  expect(csv).toContain("stint_changes");
+  expect(csv).toContain("Official pit summary not published");
+  expect(csv).not.toContain("0 stops");
+});
+
 test("positions: P1 on top, grid at lap 0, highlighted drivers, gaps kept, labels apart", async ({ page }) => {
   const errors = await openLab(page, "/?view=positions&season=2026&round=13");
   const view = page.locator("#lab-positions");
@@ -131,6 +157,7 @@ test("positions: P1 on top, grid at lap 0, highlighted drivers, gaps kept, label
 
   // Biggest climb from the positions: Hamilton P9 on lap 3 to P5.
   await expect(view.locator("[data-biggest-climb]")).toContainText("+4 · Lewis Hamilton, P9 on lap 3 to P5");
+  await expect(view.locator("[data-climb-label]")).toHaveText("Biggest recovery in the race (from lowest running position)");
   // Neutralisations drawn on the chart too.
   await expect(view.locator("[data-position-band=SC]")).toHaveCount(1);
 
@@ -196,6 +223,7 @@ test("race report: strategy at a glance and the positions line", async ({ page }
   await expect(card.locator("[data-strategy-row=NOR] [data-stint-letter]").first()).toHaveText("M");
   const line = report.locator("[data-positions-line]");
   await expect(line.locator("[data-climb-value]")).toHaveText("+4");
+  await expect(line.locator("[data-climb-label]")).toHaveText("Biggest recovery in the race (from lowest running position)");
   await expect(line.locator("[data-climb-detail]")).toHaveText("Lewis Hamilton, P9 on lap 3 to P5");
   // Verstappen has no position on lap 30: the maximum is restricted to the
   // drivers with every lap published, and says so.
@@ -251,7 +279,7 @@ test("not published yet: a 404 endpoint (current proxy) and an API 'unavailable'
   const report = page.locator("#lab-report");
   await expect(report.getByRole("heading", { level: 1 })).toHaveText("Fixture Grand Prix");
   await expect(report.locator("#lab-report-strategy [data-tyres-state]")).toContainText("Tyre compounds not published yet");
-  await expect(report.locator("#lab-report-strategy [data-tyres-state]")).toContainText("HTTP 404");
+  await expect(report.locator("#lab-report-strategy [data-tyres-state]")).toContainText("OpenF1 has not published tyre stints for this session yet.");
   // No result for this race: the climb says so instead of a number.
   await expect(report.locator("[data-positions-line]")).toContainText("Not available");
   await nav(page).getByRole("link", { name: "Strategy", exact: true }).click();
@@ -279,7 +307,7 @@ test("not published yet: the API's reason, an outage and the grid fallback once 
   const positions = page.locator("#lab-positions [data-positions-state]");
   await expect(positions).toContainText("Lap-by-lap positions unavailable");
   await expect(positions).toContainText("HTTP 503");
-  await expect(positions).toContainText("biggest gain grid to finish +2 · Lewis Hamilton, P7 to P5");
+  await expect(positions).toContainText("biggest gain from the grid +2 · Lewis Hamilton, P7 to P5");
   await nav(page).getByRole("link", { name: "Race report", exact: true }).click();
   await expect(page.locator("[data-positions-line] [data-climb-basis]")).toContainText("grid to finish; lap-by-lap positions not published yet");
 });

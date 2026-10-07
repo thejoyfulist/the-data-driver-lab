@@ -106,6 +106,7 @@ function uncoveredStintChanges(stints, official) {
  */
 export function buildTyreStrategy(data, results = [], pitStops = []) {
   const { availability, reason } = availabilityOf(data);
+  const pitSummaryPublished = Array.isArray(pitStops) && pitStops.length > 0;
   const stopsByCode = new Map();
   for (const stop of Array.isArray(pitStops) ? pitStops : []) {
     const code = text(stop?.driver_code)?.toUpperCase();
@@ -139,11 +140,12 @@ export function buildTyreStrategy(data, results = [], pitStops = []) {
       finish: isInt(result?.position) ? result.position : null,
       stints,
       stops,
+      pitSummaryPublished,
     };
   }).filter((row) => row.stints.length > 0).sort(byFinish);
   const raceLaps = isInt(data?.race_laps) && data.race_laps > 0 ? data.race_laps : null;
   const maxLap = Math.max(raceLaps ?? 0, ...rows.flatMap((row) => row.stints.map((stint) => stint.end)), 1);
-  return { availability, reason, raceLaps, maxLap, rows };
+  return { availability, reason, raceLaps, maxLap, pitSummaryPublished, rows };
 }
 
 /** Official pit stops of a row (stint changes outside the summary excluded). */
@@ -182,6 +184,7 @@ export function topFinisherStrategy(strategy, results = [], count = 10) {
       finish: result.position,
       stints: [],
       stops: [],
+      pitSummaryPublished: strategy?.pitSummaryPublished ?? false,
       missing: true,
     };
   });

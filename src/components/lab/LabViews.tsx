@@ -280,7 +280,10 @@ function stintExportRows(context: LabViewContext, rows: readonly TyreStrategyRow
     end_lap: stint.end,
     laps: stint.laps,
     tyre_age_at_start: stint.ageAtStart,
-    pit_stop_laps: row.stops.filter((stop) => !stop.derived).map((stop) => stop.lap).join(" ") || null,
+    pit_stops: row.pitSummaryPublished ? row.stops.filter((stop) => !stop.derived).length : null,
+    pit_stop_laps: row.pitSummaryPublished ? row.stops.filter((stop) => !stop.derived).map((stop) => stop.lap).join(" ") || null : null,
+    stint_changes: Math.max(0, row.stints.length - 1),
+    pit_summary: row.pitSummaryPublished ? "published" : "Official pit summary not published",
   })));
 }
 
@@ -320,7 +323,7 @@ export function StrategyView({ context }: { context: LabViewContext }) {
       scope={scopeLine([
         context.raceLabel ?? `${context.season}`,
         tyresReady ? `${strategy.rows.length} drivers` : `${pitRows.length} drivers`,
-        `${stops.length} pit stops`,
+        strategy.pitSummaryPublished ? `${stops.length} pit stops` : "— pit stops · Official pit summary not published",
         tyresReady ? null : "compounds not published yet",
         "ordered by finishing position",
       ])}
@@ -498,7 +501,7 @@ export function PositionsView({ context }: { context: LabViewContext }) {
         <div className="space-y-3" data-positions-state>
           <NotPublished title={state.title} detail={state.detail} source="/positions" tone={state.tone} />
           {climb.state === "ok" && (
-            <p className="text-[13px] text-white/[0.70]">From the official classification instead: biggest gain grid to finish <span className="font-mono text-light">{climb.value}</span> · {climb.detail}.</p>
+            <p className="text-[13px] text-white/[0.70]">From the official classification: biggest gain from the grid <span className="font-mono text-light">{climb.value}</span> · {climb.detail}.</p>
           )}
         </div>
       ) : (
@@ -533,7 +536,7 @@ export function PositionsView({ context }: { context: LabViewContext }) {
           </div>
           <PartialNote text={state.partial} />
           <p className="mt-3 text-[13px] text-white/[0.70]" data-biggest-climb>
-            Biggest climb ·{" "}
+            <span title={climb.state === "ok" && climb.basis === "grid" ? "Starting grid position minus finishing position in the official classification." : "Lowest position held while running, including the grid, minus finishing position. Only drivers with complete lap positions are compared."} tabIndex={0} className="cursor-help underline decoration-dotted underline-offset-2" data-climb-label>{climb.state === "ok" && climb.basis === "grid" ? "Biggest gain from the grid" : "Biggest recovery in the race (from lowest running position)"}</span> ·{" "}
             {climb.state === "ok" ? <><span className="font-mono text-light">{climb.value}</span> · {climb.detail} <span className="text-white/[0.62]" data-climb-basis={climb.basis}>· {climb.scope}</span></> : <span className="text-ambre">{climb.reason}</span>}
           </p>
           {raceLaps > 0 && (

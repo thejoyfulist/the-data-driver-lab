@@ -97,6 +97,9 @@ function climbFrom(resource: LabResource<LabPositionsPayload>, results: LabViewC
 }
 
 function PositionsLine({ figure, onOpen }: { figure: ClimbFigure | "loading"; onOpen: () => void }) {
+  const recovery = figure !== "loading" && figure.state === "ok" && figure.basis !== "grid";
+  const label = recovery ? "Biggest recovery in the race (from lowest running position)" : "Biggest gain from the grid";
+  const definition = recovery ? "Lowest position held while running, including the grid, minus finishing position. Only drivers with complete lap positions are compared." : "Starting grid position minus finishing position in the official classification.";
   return (
     <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-white/[0.08] bg-white/[0.018] px-3 py-1.5 text-[13px] text-white/[0.70] md:order-first md:px-4 xl:col-span-2" data-positions-line>
       <span className="text-white/[0.86]">Positions</span>
@@ -105,7 +108,7 @@ function PositionsLine({ figure, onOpen }: { figure: ClimbFigure | "loading"; on
         <span className="inline-block h-4 w-40 animate-pulse rounded bg-white/[0.06] motion-reduce:animate-none" role="status"><span className="sr-only">Loading positions</span></span>
       ) : figure.state === "ok" ? (
         <span className="min-w-0">
-          Biggest climb <span className="font-mono text-light" data-climb-value>{figure.value}</span> · <span data-climb-detail>{figure.detail}</span>
+          <span title={definition} tabIndex={0} className="cursor-help underline decoration-dotted underline-offset-2" data-climb-label>{label}</span> <span className="font-mono text-light" data-climb-value>{figure.value}</span> · <span data-climb-detail>{figure.detail}</span>
           <span className="text-white/[0.62]" data-climb-basis={figure.basis}> · {figure.scope}</span>
         </span>
       ) : (
@@ -121,7 +124,7 @@ function PositionsLine({ figure, onOpen }: { figure: ClimbFigure | "loading"; on
 function Figure({ id, label, figure }: { id: string; label: string; figure: KeyFigure | "loading" }) {
   return (
     <div className="min-w-0 rounded-xl border border-white/[0.08] bg-white/[0.018] px-3 py-2 md:px-4 md:py-3.5" data-key-figure={id}>
-      <dt className="text-[13px] text-white/[0.70]">{label}</dt>
+      <dt className="text-[13px] text-white/[0.70]" title={id === "biggest-gain" ? "Starting grid position minus finishing position in the official classification." : undefined} tabIndex={id === "biggest-gain" ? 0 : undefined}>{label}</dt>
       {figure === "loading" ? (
         <dd className="mt-1 h-8 w-24 animate-pulse rounded bg-white/[0.06] motion-reduce:animate-none" role="status"><span className="sr-only">Loading {label.toLowerCase()}</span></dd>
       ) : figure.state === "ok" ? (
@@ -156,11 +159,11 @@ export function RaceReportView({ context, race, isLatestCompleted, onSelectView,
   const figures: { id: string; label: string; figure: KeyFigure | "loading" }[] = [
     { id: "winner", label: "Winner", figure: loadingResults ? "loading" : winnerFigure(context.results) },
     { id: "fastest-lap", label: "Fastest lap", figure: fastestFrom(fastest) },
-    { id: "biggest-gain", label: "Biggest gain", figure: loadingResults ? "loading" : biggestGainFigure(context.results) },
+    { id: "biggest-gain", label: "Biggest gain from the grid", figure: loadingResults ? "loading" : biggestGainFigure(context.results) },
     { id: "neutralised", label: "Neutralised", figure: neutralisedFrom(safetyCars, laps) },
   ];
   const climb = climbFrom(positions, context.results, loadingResults);
-  const exportRows = [...figures, { id: "biggest-climb", label: "Biggest climb", figure: climb }].map(({ label, figure }) => ({
+  const exportRows = [...figures, { id: "biggest-climb", label: climb !== "loading" && climb.state === "ok" && climb.basis !== "grid" ? "Biggest recovery in the race (from lowest running position)" : "Biggest gain from the grid (positions fallback)", figure: climb }].map(({ label, figure }) => ({
     season: context.season,
     race: race?.name ?? context.raceLabel,
     figure: label,
@@ -255,7 +258,7 @@ export function RaceReportView({ context, race, isLatestCompleted, onSelectView,
         </LazyView>
       </div>
       {coverage}
-      <SourceLine source={{ source: "formula1.com results via The Data Driver API" }} footnote="Key figures: winner and biggest gain from the official classification (grid to finish, classified drivers with a grid slot); fastest lap from /fastest-laps; neutralisations, tyre strategy and the biggest climb (lowest position held from the grid onwards to the finish) from OpenF1 enrichment (CC BY-NC-SA 4.0, non-official), the climb falling back to grid to finish when lap-by-lap positions are not published. Each card's ⋯ menu exports its rows and copies its API request." />
+      <SourceLine source={{ source: "formula1.com results via The Data Driver API" }} footnote="Key figures: winner and biggest gain from the grid use the official classification (grid to finish, classified drivers with a grid slot); fastest lap comes from /fastest-laps. Neutralisations, tyre strategy and biggest recovery in the race (lowest position held from the grid onwards to the finish) use OpenF1 enrichment (CC BY-NC-SA 4.0, non-official). When lap-by-lap positions are not published, the positions line uses the official grid-to-finish gain and labels that fallback. Each card's ⋯ menu exports its rows and copies its API request." />
     </section>
   );
 }

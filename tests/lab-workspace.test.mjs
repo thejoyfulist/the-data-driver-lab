@@ -279,6 +279,7 @@ test("strategy: rows in finishing order, official stops when published, stint ch
   // Bravo has no stint: no row (never drawn as "no stop"); Delta (DNF) last.
   assert.deepEqual(strategy.rows.map((row) => [row.code, row.finish]), [["AAA", 1], ["CCC", 3], ["DDD", null]]);
   const [alpha, charlie, delta] = strategy.rows;
+  assert.equal(strategy.pitSummaryPublished, true);
   assert.equal(compoundSequence(alpha), "M–?");
   assert.deepEqual(alpha.stops, [{ lap: 25, durationMs: 21_900, derived: false }]);
   assert.equal(alpha.stints.length, 2, "an inverted stint is dropped");
@@ -288,6 +289,7 @@ test("strategy: rows in finishing order, official stops when published, stint ch
   assert.equal(describeStint(charlie.stints[1]), "Hard, laps 21–50 (30 laps), tyres 2 laps old at the start");
   assert.equal(describeStint(charlie.stints[0]), "Medium, laps 1–20 (20 laps), new tyres");
   assert.equal(delta.stops.length, 0);
+  assert.equal(buildTyreStrategy(stints, classified, []).pitSummaryPublished, false, "an empty pit summary cannot certify zero stops");
   assert.deepEqual(buildTyreStrategy({ availability: "unavailable", reason: "Not yet", drivers: [] }).rows, []);
   assert.equal(buildTyreStrategy(null).availability, null);
 });

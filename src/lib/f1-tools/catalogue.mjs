@@ -418,7 +418,7 @@ export const F1_TOOLS = [
   {
     name: "f1_positions",
     title: "Positions lap by lap",
-    description: "Running order of a race: per driver grid, finish, position after lap 1, best and worst running position and places gained from the grid. Pass driver_code with from_lap/to_lap (at most 20 laps; lap 0 = grid) to list that driver's position on each lap. Missing laps are never interpolated. Non-official OpenF1 enrichment; finishing positions remain official.",
+    description: "Running order of a race: per driver grid, finish, position after lap 1, best and worst running position. places_gained and gain_from_grid mean grid minus finish; recovery_from_lowest_running_position means the lowest position held during the race (grid included) minus finish, and is null unless every race lap is published. These are different measures. Pass driver_code with from_lap/to_lap (at most 20 laps; lap 0 = grid) to list that driver's position on each lap. Missing laps are never interpolated. Non-official OpenF1 enrichment; finishing positions remain official.",
     inputSchema: raceInput.extend({
       driver_code: z.string().regex(/^[A-Za-z]{3}$/).optional().describe("Three-letter driver code, e.g. NOR."),
       from_lap: z.number().int().min(0).max(100).optional().describe("First lap to list (0 = grid). Needs driver_code."),
@@ -441,12 +441,16 @@ export const F1_TOOLS = [
           const running = points.filter((point) => point.lap >= 1).map((point) => point.position);
           const grid = isNumber(row.grid) ? row.grid : points.find((point) => point.lap === 0)?.position ?? null;
           const finish = isNumber(row.finish) ? row.finish : null;
+          const complete = isNumber(data?.race_laps) && data.race_laps > 0 && new Set(points.filter((point) => point.lap >= 1 && point.lap <= data.race_laps).map((point) => point.lap)).size === data.race_laps;
+          const gainFromGrid = grid != null && grid > 0 && finish != null ? grid - finish : null;
           return {
             ...driverRow(row), team: text(row.team_name), grid, finish,
             lap_1: points.find((point) => point.lap === 1)?.position ?? null,
             best_running: running.length ? Math.min(...running) : null,
             worst_running: running.length ? Math.max(...running) : null,
-            places_gained: grid != null && grid > 0 && finish != null ? grid - finish : null,
+            places_gained: gainFromGrid,
+            gain_from_grid: gainFromGrid,
+            recovery_from_lowest_running_position: complete && finish != null ? Math.max(grid ?? 0, ...running) - finish : null,
             laps_with_position: points.length,
             laps: from == null ? undefined : points
               .filter((point) => point.lap >= from && point.lap <= to)

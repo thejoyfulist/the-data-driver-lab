@@ -70,7 +70,7 @@ function rowLabel(row: TyreStrategyRow): string {
   if (row.missing) return `${place} ${row.name}: stints not published`;
   const official = officialStops(row);
   const changes = stintChangesOutsideSummary(row);
-  const stops = official.length
+  const stops = !row.pitSummaryPublished ? "official pit summary not published" : official.length
     ? `${official.length} official ${official.length === 1 ? "pit stop" : "pit stops"} on lap ${official.map((stop) => stop.lap).join(", ")}`
     : "no official pit stop";
   const extra = changes.length
@@ -79,8 +79,9 @@ function rowLabel(row: TyreStrategyRow): string {
   return `${place} ${row.name}: ${row.stints.map(describeStint).join("; ")}; ${stops}${extra}`;
 }
 
-/** Official pit stops only: a stint change outside the summary is drawn, never counted as a stop. */
+/** The official count stays unknown when the summary is not published. */
 function stopCount(row: TyreStrategyRow): string {
+  if (!row.pitSummaryPublished) return "—";
   const count = officialStops(row).length;
   return `${count} ${count === 1 ? "stop" : "stops"}`;
 }
@@ -153,8 +154,9 @@ export function TyreStrategyChart({ rows, maxLap, compact = false }: TyreStrateg
                 />
               ))}
             </span>
-            <span className={`${compact ? "hidden sm:block" : ""} text-right font-mono text-[12px] tabular-nums text-white/[0.70]`} aria-hidden="true">
-              {row.missing ? "—" : compact ? compoundSequence(row) : stopCount(row)}
+            <span className={`${compact ? "hidden sm:block" : ""} text-right font-mono text-[12px] tabular-nums text-white/[0.70]`}>
+              <span title={!row.pitSummaryPublished ? "Official pit summary not published" : undefined} data-stop-count>{row.missing ? "—" : compact ? compoundSequence(row) : stopCount(row)}</span>
+              {!compact && !row.missing && !row.pitSummaryPublished && <span className="block text-[12px] text-white/[0.62]" data-stint-change-count>{Math.max(0, row.stints.length - 1)} stint changes</span>}
             </span>
           </li>
         ))}

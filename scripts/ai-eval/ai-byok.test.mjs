@@ -311,6 +311,11 @@ test("catalogue: f1_positions summarises every driver and lists a bounded lap wi
     { grid: 1, finish: 22, lap_1: 1, best: 1, worst: 22, gained: -21, laps: 57 },
   );
   assert.equal(first.laps, undefined);
+  assert.equal(first.gain_from_grid, -21);
+  assert.equal(first.recovery_from_lowest_running_position, null, "a missing lap blocks a race recovery figure");
+  assert.equal(result.data.drivers[1].gain_from_grid, -19);
+  assert.equal(result.data.drivers[1].recovery_from_lowest_running_position, 0, "complete running positions support the separate recovery figure");
+  assert.match(F1_TOOLS.find((tool) => tool.name === "f1_positions").description, /lowest position held during the race/);
   assert.equal(result.source.kind, "openf1_enrichment");
   assert.ok(JSON.stringify(result).length <= MAX_RESULT_CHARS);
   // A lap window needs a driver; it is capped at 20 laps and keeps gaps as gaps.
