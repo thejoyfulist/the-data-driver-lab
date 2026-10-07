@@ -1,4 +1,21 @@
+import { PROVIDER_CONNECT_ORIGINS } from "./src/lib/ai-byok/providers.mjs";
+
 const apiOrigin = (process.env.NEXT_PUBLIC_TDD_API_BASE || "https://api.thedatadriver.app").replace(/\/+$/, "");
+
+// "AI — your own key" calls the visitor's provider from the browser: the fixed
+// providers and a local Ollama are allowed. A self-hosted Lab can allow its own
+// OpenAI-compatible endpoints (space-separated origins); see docs/AI.md.
+const extraAiOrigins = (process.env.NEXT_PUBLIC_TDD_AI_CONNECT_SRC || "")
+  .split(/\s+/)
+  .filter(Boolean)
+  .map((value) => {
+    const url = new URL(value);
+    if (url.protocol !== "https:" && !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) {
+      throw new Error(`NEXT_PUBLIC_TDD_AI_CONNECT_SRC: ${value} must use HTTPS (HTTP only for localhost).`);
+    }
+    return url.origin;
+  });
+const connectSources = ["'self'", apiOrigin, ...PROVIDER_CONNECT_ORIGINS, ...extraAiOrigins];
 
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
@@ -7,7 +24,7 @@ const CONTENT_SECURITY_POLICY = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self' data:",
-  `connect-src 'self' ${apiOrigin}`,
+  `connect-src ${[...new Set(connectSources)].join(" ")}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

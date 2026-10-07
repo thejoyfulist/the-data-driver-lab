@@ -63,6 +63,12 @@ const TelemetryPanel = dynamic(() => import("@/components/lab/SeasonViews").then
   loading: () => <ViewSkeleton label="Loading telemetry" rows={4} />,
 });
 const CommandPalette = dynamic(() => import("@/components/lab/CommandPalette").then((module) => module.CommandPalette), { ssr: false });
+// The AI mode (and the AI SDK it needs) loads only when a visitor opens it.
+const AskAiPanel = dynamic(() => import("@/components/lab/AskAiPanel"), {
+  ssr: false,
+  loading: () => <div className="mt-5"><ViewSkeleton label="Loading AI mode" rows={3} /></div>,
+});
+const AI_GUIDE_URL = `${REPO_URL}/blob/main/docs/AI.md`;
 
 const PRACTICE_SESSIONS = ["FP1", "FP2", "FP3"] as const;
 
@@ -408,6 +414,7 @@ export default function LabPageClient({
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<LabAnswer | null>(null);
   const [isAsking, setIsAsking] = useState(false);
+  const [askMode, setAskMode] = useState<"grounded" | "ai">("grounded");
   const [sessionView, setSessionView] = useState<SessionView>("race");
   const [practiceBest, setPracticeBest] = useState<PracticeBestSummary | null>(null);
   const [qualifying, setQualifying] = useState<LabQualifyingResult[] | null>(null);
@@ -1822,8 +1829,26 @@ export default function LabPageClient({
         </section>
 
         <section id="lab-ask" aria-label="Ask the data" className="mt-4 grid scroll-mt-28 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="rounded-xl border border-white/[0.10] bg-white/[0.02] p-5 md:p-6"><p className="font-mono text-[11px] uppercase tracking-[0.12em] text-white/[0.62]">11 / Ask the data</p><h2 className="mt-1 font-serif text-h3 text-light">Turn a question into a query.</h2><p className="mt-2 max-w-xl text-body-sm leading-relaxed text-white/[0.66]">Ask the grounded endpoint after choosing the evidence above. Answers stay tied to published data and sources.</p><form className="mt-5 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => { event.preventDefault(); void askQuestion(); }}><label htmlFor="lab-question" className="sr-only">Question about the selected F1 data</label><input id="lab-question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="e.g. Who gained the most positions?" className="control-input flex-1" /><button type="submit" disabled={!question.trim() || isAsking} className="min-h-11 rounded-lg bg-teal px-4 py-3 font-mono text-[11px] uppercase tracking-[0.1em] text-dark disabled:cursor-not-allowed disabled:opacity-40">{isAsking ? "Querying…" : "Ask ↗"}</button></form>{answer && <div className="mt-5 border-t border-teal/15 pt-5" aria-live="polite"><p className="text-body leading-relaxed text-white/[0.80]">{answer.answer}</p>{answer.sources.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{answer.sources.map((source, index) => <SourceCitation key={`${source.href ?? "text"}:${source.title}:${index}`} source={source} />)}</div>}</div>}</div>
-          <div className="rounded-xl border border-white/[0.08] bg-white/[0.018] p-5"><p className="section-index mb-4">TRY A QUESTION</p><div className="space-y-1">{starterQuestions.map((starter) => <button key={starter} type="button" onClick={() => handleStarterQuestion(starter)} aria-label={`Ask: ${starter}`} data-question={starter} className="flex w-full items-start justify-between gap-3 rounded-lg px-3 py-3 text-left text-body-sm text-white/[0.70] hover:bg-white/[0.04] hover:text-light"><span>{starter}</span><span className="text-teal">↗</span></button>)}</div></div>
+          <div className="rounded-xl border border-white/[0.10] bg-white/[0.02] p-5 md:p-6"><p className="font-mono text-[11px] uppercase tracking-[0.12em] text-white/[0.62]">11 / Ask the data</p><h2 className="mt-1 font-serif text-h3 text-light">Turn a question into a query.</h2><p className="mt-2 max-w-xl text-body-sm leading-relaxed text-white/[0.66]">{askMode === "grounded" ? "Ask the grounded endpoint after choosing the evidence above. Answers stay tied to published data and sources." : "Bring your own AI model: it may answer only from The Data Driver API tools it calls, and must cite them."}</p>
+            <div role="group" aria-label="Answer mode" className="mt-4 inline-flex rounded-lg border border-white/[0.10] p-1">
+              {([["grounded", "Grounded (default)"], ["ai", "AI — your own key"]] as const).map(([value, label]) => (
+                <button key={value} type="button" aria-pressed={askMode === value} onClick={() => setAskMode(value)} className={`min-h-9 rounded-md px-3 font-mono text-[11px] uppercase tracking-[0.08em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 ${askMode === value ? "bg-white/[0.08] text-light" : "text-white/[0.66] hover:text-light"}`}>{label}</button>
+              ))}
+            </div>
+            {askMode === "grounded" ? <><form className="mt-5 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => { event.preventDefault(); void askQuestion(); }}><label htmlFor="lab-question" className="sr-only">Question about the selected F1 data</label><input id="lab-question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="e.g. Who gained the most positions?" className="control-input flex-1" /><button type="submit" disabled={!question.trim() || isAsking} className="min-h-11 rounded-lg bg-teal px-4 py-3 font-mono text-[11px] uppercase tracking-[0.1em] text-dark disabled:cursor-not-allowed disabled:opacity-40">{isAsking ? "Querying…" : "Ask ↗"}</button></form>{answer && <div className="mt-5 border-t border-teal/15 pt-5" aria-live="polite"><p className="text-body leading-relaxed text-white/[0.80]">{answer.answer}</p>{answer.sources.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{answer.sources.map((source, index) => <SourceCitation key={`${source.href ?? "text"}:${source.title}:${index}`} source={source} />)}</div>}</div>}</> : <AskAiPanel season={LIVE_SEASON} />}
+          </div>
+          {askMode === "grounded" ? <div className="rounded-xl border border-white/[0.08] bg-white/[0.018] p-5"><p className="section-index mb-4">TRY A QUESTION</p><div className="space-y-1">{starterQuestions.map((starter) => <button key={starter} type="button" onClick={() => handleStarterQuestion(starter)} aria-label={`Ask: ${starter}`} data-question={starter} className="flex w-full items-start justify-between gap-3 rounded-lg px-3 py-3 text-left text-body-sm text-white/[0.70] hover:bg-white/[0.04] hover:text-light"><span>{starter}</span><span className="text-teal">↗</span></button>)}</div></div> : (
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.018] p-5 text-body-sm leading-relaxed text-white/[0.70]">
+              <p className="section-index mb-4">HOW AI MODE WORKS</p>
+              <ul className="space-y-3">
+                <li>Your key stays in this browser. Requests go straight from this page to the provider you choose, never through The Data Driver.</li>
+                <li>The key is kept for this tab only unless you tick &ldquo;Remember on this device&rdquo;. &ldquo;Forget key&rdquo; removes it.</li>
+                <li>The model can only read the public API through read-only tools. Each answer lists the tool calls and the sources it read; OpenF1 data is non-official enrichment (CC BY-NC-SA 4.0).</li>
+                <li>Models can still make mistakes: check the sources. The grounded mode stays the default.</li>
+              </ul>
+              <a href={AI_GUIDE_URL} className="mt-4 inline-block font-mono text-[11px] uppercase tracking-[0.1em] text-teal hover:underline">Providers, local models and CORS ↗</a>
+            </div>
+          )}
         </section>
 
         <section id="lab-explorer" aria-label="Data explorer" className="mt-4 scroll-mt-28 rounded-xl border border-white/[0.08] bg-white/[0.018]">

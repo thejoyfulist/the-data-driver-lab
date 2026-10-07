@@ -35,6 +35,9 @@ Unavailable data stays unavailable — nothing is guessed or back-filled.
 - **Honest empty states**: when an endpoint is unavailable the view says so; it never substitutes a prediction
   for a measured result.
 - **Mobile layout** with compact filters.
+- **Optional AI mode with your own key**: ask questions with a model from Anthropic, OpenAI, OpenRouter,
+  Groq, a local Ollama or any OpenAI-compatible endpoint. The model answers from read-only F1 tools and
+  shows every tool call and source; the key stays in your browser. See [AI mode](#ai-mode-your-own-key).
 
 ![The Data Lab on mobile](docs/screenshots/lab-mobile.png)
 
@@ -68,6 +71,7 @@ More options (production build, Docker without Compose, Vercel, environment vari
 | `TDD_API_BASE` | runtime (server) | `https://api.thedatadriver.app` | Upstream API used by the server page and the `/api/f1` proxy. |
 | `NEXT_PUBLIC_TDD_API_BASE` | build time | `https://api.thedatadriver.app` | Origin shown in "copy API request" and allowed by the CSP. Also used by the server when `TDD_API_BASE` is unset. |
 | `NEXT_PUBLIC_TDD_REPO_URL` | build time | this repository | "Source" link in the header and footer. |
+| `NEXT_PUBLIC_TDD_AI_CONNECT_SRC` | build time | none | Extra origins (space-separated) the CSP allows for the AI mode, e.g. your own OpenAI-compatible endpoint. |
 
 Copy `.env.example` to `.env.local` to override them locally.
 
@@ -89,15 +93,41 @@ Browser ──► Next.js app (this repository)
 - `src/lib/proxy-allowlist.mjs` — the read endpoints the proxy forwards; everything else answers 404.
 - `src/lib/team-colors.ts` — team colours as plain hex values (no logos or other team assets).
 
-The browser only talks to its own origin. The proxy forwards the allow-listed `GET` endpoints and a single
-`POST` (`/v1/f1/chat`, the grounded question endpoint) with an 8 KB body limit.
+- `src/lib/f1-tools/` — the read-only F1 tool catalogue (inputs as Zod / JSON Schema, bounded JSON outputs
+  with source and licence), shared by the AI mode and the evaluation bench.
+- `src/lib/ai-byok/` and `src/components/lab/AskAiPanel.tsx` — the optional AI mode (providers, key storage,
+  the tool loop), loaded only when it is opened.
+
+The browser talks to its own origin. The proxy forwards the allow-listed `GET` endpoints and a single
+`POST` (`/v1/f1/chat`, the grounded question endpoint) with an 8 KB body limit. The only exception is the
+AI mode, where the browser calls the provider you chose directly.
+
+## AI mode (your own key)
+
+"Ask the data" keeps its deterministic grounded endpoint as the default. **AI — your own key** is an
+optional second mode:
+
+- **Providers**: Anthropic, OpenAI, OpenRouter, Groq, Ollama (local) and any OpenAI-compatible endpoint,
+  through the [Vercel AI SDK](https://ai-sdk.dev). The model name is free text.
+- **Key safety**: requests go from your browser straight to the provider, never through The Data Driver
+  or the `/api/f1` proxy. The key is kept in `sessionStorage` (this tab only) unless you tick
+  "Remember on this device"; "Forget key" removes it. Endpoints on a `thedatadriver.app` host are refused.
+- **Grounding**: the model may answer only from the results of read-only F1 tools over the public API,
+  must say "not available" otherwise, and cites its sources; the Lab shows every tool call and source.
+  At most 8 tool steps per question.
+- **Ollama**: allow the Lab's origin with `OLLAMA_ORIGINS` (CORS), e.g.
+  `OLLAMA_ORIGINS="https://thedatadriver.app" ollama serve`.
+- **Evaluation bench**: about fifty frozen questions graded exact / correct refusal / wrong, with a mock
+  mode that runs in CI (`npm run eval:ai -- --mode mock`).
+
+Details, CORS for other servers and the tool catalogue: [docs/AI.md](docs/AI.md).
 
 ## Development
 
 ```bash
 npm run lint        # ESLint (eslint-config-next)
 npm run typecheck   # tsc --noEmit
-npm test            # unit tests (node:test)
+npm test            # unit tests (node:test) and the AI bench in mock mode
 npm run test:e2e    # Playwright against a local mock API (npx playwright install chromium first)
 npm run build       # production build
 ```

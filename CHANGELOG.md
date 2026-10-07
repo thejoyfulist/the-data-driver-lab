@@ -3,6 +3,18 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Optional "AI — your own key" mode in Ask the data: Anthropic, OpenAI, OpenRouter, Groq, Ollama or any
+  OpenAI-compatible endpoint, called directly from the browser (Vercel AI SDK). The grounded endpoint stays
+  the default. Key in `sessionStorage` by default, opt-in "Remember on this device", "Forget key".
+- Read-only F1 tool catalogue (`src/lib/f1-tools/`) with JSON Schema inputs, bounded outputs, source and
+  licence on every result.
+- Evaluation bench (`scripts/ai-eval/`): about fifty frozen questions, mock, deterministic and provider modes.
+- `NEXT_PUBLIC_TDD_AI_CONNECT_SRC` to allow extra AI endpoints in the CSP.
+
 ## [1.0.0] — 2026-10-07
 
 First public release of the Data Lab as a standalone application.

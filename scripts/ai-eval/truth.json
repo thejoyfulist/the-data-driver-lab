@@ -1,0 +1,2299 @@
+{
+  "frozen_at": "2026-10-07T13:21:29.051Z",
+  "api_base": "https://api.thedatadriver.app",
+  "count": 61,
+  "questions": [
+    {
+      "id": "cal-singapore-date",
+      "category": "calendar",
+      "kind": "answer",
+      "question": "On what date is the 2026 Singapore Grand Prix?",
+      "expect": [
+        [
+          "2026-10-11",
+          "11 October",
+          "October 11",
+          "11th October",
+          "11 Oct"
+        ]
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Singapore Grand Prix"
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_resolve_race",
+          "path": "data.candidates.0.date"
+        },
+        "template": "The 2026 Singapore Grand Prix is scheduled for {value}."
+      }
+    },
+    {
+      "id": "cal-japan-circuit",
+      "category": "calendar",
+      "kind": "answer",
+      "question": "At which circuit was the 2026 Japanese Grand Prix held?",
+      "expect": [
+        "Suzuka Circuit"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Japanese Grand Prix"
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_resolve_race",
+          "path": "data.candidates.0.circuit"
+        },
+        "template": "It was held at {value}."
+      }
+    },
+    {
+      "id": "cal-azerbaijan-round",
+      "category": "calendar",
+      "kind": "answer",
+      "question": "Which round of the 2026 championship was the Azerbaijan Grand Prix?",
+      "expect": [
+        "15"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_resolve_race",
+          "path": "data.candidates.0.official_round"
+        },
+        "template": "It was round {value}."
+      }
+    },
+    {
+      "id": "cal-saudi-status",
+      "category": "calendar",
+      "kind": "answer",
+      "question": "Did the 2026 Saudi Arabian Grand Prix take place?",
+      "expect": [
+        [
+          "cancelled",
+          "canceled"
+        ]
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Saudi Arabian Grand Prix"
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_resolve_race",
+          "path": "data.candidates.0.status"
+        },
+        "template": "No: its status in the calendar is {value}."
+      }
+    },
+    {
+      "id": "cal-miami-sprint",
+      "category": "calendar",
+      "kind": "answer",
+      "question": "In which city is the circuit of the 2026 Miami Grand Prix?",
+      "expect": [
+        "Miami Gardens"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Miami Grand Prix"
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_resolve_race",
+          "path": "data.candidates.0.city"
+        },
+        "template": "The circuit is in {value}."
+      }
+    },
+    {
+      "id": "cal-round-16-2026",
+      "category": "calendar",
+      "kind": "answer",
+      "question": "Which Grand Prix was round 16 of the 2026 season?",
+      "expect": [
+        "Malaysia"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "round 16"
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_resolve_race",
+          "path": "data.candidates.0.name"
+        },
+        "template": "Round 16 was the {value}."
+      }
+    },
+    {
+      "id": "wdc-leader-2026",
+      "category": "standings",
+      "kind": "answer",
+      "question": "Who leads the 2026 drivers' championship?",
+      "expect": [
+        "Kimi Antonelli"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/standings/drivers/2026"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_driver_standings",
+              "arguments": {
+                "season": 2026,
+                "limit": 3
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_driver_standings",
+          "path": "data.standings.0.name"
+        },
+        "template": "{value} leads the championship."
+      }
+    },
+    {
+      "id": "wdc-leader-points-2026",
+      "category": "standings",
+      "kind": "answer",
+      "question": "How many points does the 2026 drivers' championship leader have?",
+      "expect": [
+        "320"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/standings/drivers/2026"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_driver_standings",
+              "arguments": {
+                "season": 2026,
+                "limit": 1
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_driver_standings",
+          "path": "data.standings.0.points"
+        },
+        "template": "The leader has {value} points."
+      }
+    },
+    {
+      "id": "wdc-russell-points-2026",
+      "category": "standings",
+      "kind": "answer",
+      "question": "How many championship points does George Russell have in 2026?",
+      "expect": [
+        "236"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/standings/drivers/2026"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_driver_standings",
+              "arguments": {
+                "season": 2026
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_driver_standings",
+          "path": "data.standings.?code=RUS.0.points"
+        },
+        "template": "George Russell has {value} points."
+      }
+    },
+    {
+      "id": "wdc-norris-wins-2026",
+      "category": "standings",
+      "kind": "answer",
+      "question": "How many races has Lando Norris won in 2026?",
+      "expect": [
+        "2"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/standings/drivers/2026"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_driver_standings",
+              "arguments": {
+                "season": 2026
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_driver_standings",
+          "path": "data.standings.?code=NOR.0.wins"
+        },
+        "template": "Lando Norris has {value} wins."
+      }
+    },
+    {
+      "id": "wdc-third-2026",
+      "category": "standings",
+      "kind": "answer",
+      "question": "Who is third in the 2026 drivers' championship?",
+      "expect": [
+        "Lewis Hamilton"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/standings/drivers/2026"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_driver_standings",
+              "arguments": {
+                "season": 2026,
+                "limit": 3
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_driver_standings",
+          "path": "data.standings.2.name"
+        },
+        "template": "{value} is third."
+      }
+    },
+    {
+      "id": "wdc-verstappen-team-2026",
+      "category": "standings",
+      "kind": "answer",
+      "question": "Which team does Max Verstappen drive for in 2026?",
+      "expect": [
+        "Red Bull Racing"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/standings/drivers/2026"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_driver",
+              "arguments": {
+                "season": 2026,
+                "query": "Max Verstappen"
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_resolve_driver",
+          "path": "data.candidates.0.team"
+        },
+        "template": "He drives for {value}."
+      }
+    },
+    {
+      "id": "wdc-champion-2025",
+      "category": "standings",
+      "kind": "answer",
+      "question": "Who finished top of the 2025 drivers' championship?",
+      "expect": [
+        "Lando Norris"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/standings/drivers/2025"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_driver_standings",
+              "arguments": {
+                "season": 2025,
+                "limit": 2
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_driver_standings",
+          "path": "data.standings.0.name"
+        },
+        "template": "{value} was top of the 2025 standings."
+      }
+    },
+    {
+      "id": "wdc-margin-2025",
+      "category": "standings",
+      "kind": "answer",
+      "question": "How many points did the 2025 drivers' championship runner-up score?",
+      "expect": [
+        "416"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/standings/drivers/2025"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_driver_standings",
+              "arguments": {
+                "season": 2025,
+                "limit": 2
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_driver_standings",
+          "path": "data.standings.1.points"
+        },
+        "template": "The runner-up scored {value} points."
+      }
+    },
+    {
+      "id": "wcc-leader-2026",
+      "category": "standings",
+      "kind": "answer",
+      "question": "Which team leads the 2026 constructors' championship?",
+      "expect": [
+        "Mercedes"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/standings/constructors/2026"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_constructor_standings",
+              "arguments": {
+                "season": 2026
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_constructor_standings",
+          "path": "data.standings.0.team"
+        },
+        "template": "{value} lead the constructors' championship."
+      }
+    },
+    {
+      "id": "wcc-ferrari-points-2026",
+      "category": "standings",
+      "kind": "answer",
+      "question": "How many points do Ferrari have in the 2026 constructors' championship?",
+      "expect": [
+        "405"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/standings/constructors/2026"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_constructor_standings",
+              "arguments": {
+                "season": 2026
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_constructor_standings",
+          "path": "data.standings.?team=Ferrari.0.points"
+        },
+        "template": "Ferrari have {value} points."
+      }
+    },
+    {
+      "id": "wcc-williams-position-2026",
+      "category": "standings",
+      "kind": "answer",
+      "question": "Where are Williams in the 2026 constructors' standings?",
+      "expect": [
+        [
+          "P9",
+          "9th"
+        ]
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/standings/constructors/2026"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_constructor_standings",
+              "arguments": {
+                "season": 2026
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_constructor_standings",
+          "path": "data.standings.?team=Williams.0.position"
+        },
+        "template": "Williams are P{value}."
+      }
+    },
+    {
+      "id": "res-azerbaijan-winner",
+      "category": "results",
+      "kind": "answer",
+      "question": "Who won the 2026 Azerbaijan Grand Prix?",
+      "expect": [
+        "George Russell"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/results"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_race_results",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17,
+                "limit": 3
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_race_results",
+          "path": "data.results.0.name"
+        },
+        "template": "{value} won the race."
+      }
+    },
+    {
+      "id": "res-monaco-winner",
+      "category": "results",
+      "kind": "answer",
+      "question": "Who won the 2026 Monaco Grand Prix?",
+      "expect": [
+        "Kimi Antonelli"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/8/results"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Monaco Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_race_results",
+              "arguments": {
+                "season": 2026,
+                "api_round": 8,
+                "limit": 3
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_race_results",
+          "path": "data.results.0.name"
+        },
+        "template": "{value} won the race."
+      }
+    },
+    {
+      "id": "res-italy-winner",
+      "category": "results",
+      "kind": "answer",
+      "question": "Who won the 2026 Italian Grand Prix?",
+      "expect": [
+        "Kimi Antonelli"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/15/results"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Italian Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_race_results",
+              "arguments": {
+                "season": 2026,
+                "api_round": 15,
+                "limit": 3
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_race_results",
+          "path": "data.results.0.name"
+        },
+        "template": "{value} won the race."
+      }
+    },
+    {
+      "id": "res-britain-winner",
+      "category": "results",
+      "kind": "answer",
+      "question": "Who won the 2026 British Grand Prix?",
+      "expect": [
+        "Charles Leclerc"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/11/results"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "British Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_race_results",
+              "arguments": {
+                "season": 2026,
+                "api_round": 11,
+                "limit": 3
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_race_results",
+          "path": "data.results.0.name"
+        },
+        "template": "{value} won the race."
+      }
+    },
+    {
+      "id": "res-malaysia-winner",
+      "category": "results",
+      "kind": "answer",
+      "question": "Who won the race held in Malaysia in 2026?",
+      "expect": [
+        "Max Verstappen"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/25/results"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Malaysia"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_race_results",
+              "arguments": {
+                "season": 2026,
+                "api_round": 25,
+                "limit": 3
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_race_results",
+          "path": "data.results.0.name"
+        },
+        "template": "{value} won the race."
+      }
+    },
+    {
+      "id": "res-azerbaijan-second",
+      "category": "results",
+      "kind": "answer",
+      "question": "Who finished second at the 2026 Azerbaijan Grand Prix, and from which grid position did they start?",
+      "expect": [
+        "Max Verstappen",
+        "8"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/results"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_race_results",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17,
+                "limit": 3
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_race_results",
+          "path": "data.results.1",
+          "fields": [
+            "name",
+            "grid"
+          ]
+        },
+        "template": "{value}"
+      }
+    },
+    {
+      "id": "res-italy-winner-grid",
+      "category": "results",
+      "kind": "answer",
+      "question": "From which grid position did the winner of the 2026 Italian Grand Prix start?",
+      "expect": [
+        "19"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/15/results"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Italian Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_race_results",
+              "arguments": {
+                "season": 2026,
+                "api_round": 15,
+                "limit": 1
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_race_results",
+          "path": "data.results.0.grid"
+        },
+        "template": "The winner started from grid position {value}."
+      }
+    },
+    {
+      "id": "res-azerbaijan-laps",
+      "category": "results",
+      "kind": "answer",
+      "question": "How many laps did the winner complete at the 2026 Azerbaijan Grand Prix?",
+      "expect": [
+        "51"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/results"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_race_results",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17,
+                "limit": 1
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_race_results",
+          "path": "data.results.0.laps"
+        },
+        "template": "The winner completed {value} laps."
+      }
+    },
+    {
+      "id": "res-hadjar-points-azerbaijan",
+      "category": "results",
+      "kind": "answer",
+      "question": "How many points did Isack Hadjar score at the 2026 Azerbaijan Grand Prix?",
+      "expect": [
+        "15"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/results"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_race_results",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_race_results",
+          "path": "data.results.?code=HAD.0.points"
+        },
+        "template": "Isack Hadjar scored {value} points."
+      }
+    },
+    {
+      "id": "res-abu-dhabi-2025-winner",
+      "category": "results",
+      "kind": "answer",
+      "question": "Who won the 2025 Abu Dhabi Grand Prix?",
+      "expect": [
+        "Max Verstappen"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2025",
+        "https://api.thedatadriver.app/v1/f1/races/2025/24/results"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2025,
+                "query": "Abu Dhabi Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_race_results",
+              "arguments": {
+                "season": 2025,
+                "api_round": 24,
+                "limit": 1
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_race_results",
+          "path": "data.results.0.name"
+        },
+        "template": "{value} won."
+      }
+    },
+    {
+      "id": "res-british-1950-winner",
+      "category": "results",
+      "kind": "answer",
+      "question": "Who won the 1950 British Grand Prix?",
+      "expect": [
+        "Nino Farina"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/1950",
+        "https://api.thedatadriver.app/v1/f1/races/1950/1/results"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 1950,
+                "query": "British Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_race_results",
+              "arguments": {
+                "season": 1950,
+                "api_round": 1,
+                "limit": 1
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_race_results",
+          "path": "data.results.0.name"
+        },
+        "template": "{value} won."
+      }
+    },
+    {
+      "id": "quali-azerbaijan-pole",
+      "category": "qualifying",
+      "kind": "answer",
+      "question": "Who took pole position for the 2026 Azerbaijan Grand Prix?",
+      "expect": [
+        "George Russell"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/qualifying"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_qualifying",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17,
+                "limit": 3
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_qualifying",
+          "path": "data.qualifying.0.name"
+        },
+        "template": "{value} took pole."
+      }
+    },
+    {
+      "id": "quali-azerbaijan-pole-time",
+      "category": "qualifying",
+      "kind": "answer",
+      "question": "What was the pole time in Q3 at the 2026 Azerbaijan Grand Prix?",
+      "expect": [
+        "1:42.526"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/qualifying"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_qualifying",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17,
+                "limit": 1
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_qualifying",
+          "path": "data.qualifying.0.q3"
+        },
+        "template": "The pole time was {value}."
+      }
+    },
+    {
+      "id": "quali-leclerc-azerbaijan",
+      "category": "qualifying",
+      "kind": "answer",
+      "question": "Where did Charles Leclerc qualify for the 2026 Azerbaijan Grand Prix and what was his Q3 time?",
+      "expect": [
+        [
+          "P2",
+          "2nd",
+          "second"
+        ],
+        "1:43.363"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/qualifying"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_qualifying",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_qualifying",
+          "path": "data.qualifying.?code=LEC.0",
+          "fields": [
+            "position",
+            "q3"
+          ]
+        },
+        "template": "Charles Leclerc qualified P{value}."
+      }
+    },
+    {
+      "id": "quali-monaco-pole",
+      "category": "qualifying",
+      "kind": "answer",
+      "question": "Who was on pole at the 2026 Monaco Grand Prix?",
+      "expect": [
+        "Kimi Antonelli"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/8/qualifying"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Monaco Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_qualifying",
+              "arguments": {
+                "season": 2026,
+                "api_round": 8,
+                "limit": 1
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_qualifying",
+          "path": "data.qualifying.0.name"
+        },
+        "template": "{value} was on pole."
+      }
+    },
+    {
+      "id": "quali-abu-dhabi-2025-pole",
+      "category": "qualifying",
+      "kind": "answer",
+      "question": "Who took pole for the 2025 Abu Dhabi Grand Prix?",
+      "expect": [
+        "Max Verstappen"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2025",
+        "https://api.thedatadriver.app/v1/f1/races/2025/24/qualifying"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2025,
+                "query": "Abu Dhabi Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_qualifying",
+              "arguments": {
+                "season": 2025,
+                "api_round": 24,
+                "limit": 1
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_qualifying",
+          "path": "data.qualifying.0.name"
+        },
+        "template": "{value} took pole."
+      }
+    },
+    {
+      "id": "fl-azerbaijan",
+      "category": "laps",
+      "kind": "answer",
+      "question": "Who set the fastest lap of the 2026 Azerbaijan Grand Prix and what was the time?",
+      "expect": [
+        "George Russell",
+        "1:44.916"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/fastest-laps"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_fastest_laps",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17,
+                "limit": 3
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_fastest_laps",
+          "path": "data.fastest_laps.0",
+          "fields": [
+            "name",
+            "time"
+          ]
+        },
+        "template": "The fastest lap: {value}."
+      }
+    },
+    {
+      "id": "fl-azerbaijan-lap-number",
+      "category": "laps",
+      "kind": "answer",
+      "question": "On which lap was the fastest lap of the 2026 Azerbaijan Grand Prix set?",
+      "expect": [
+        "49"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/fastest-laps"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_fastest_laps",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17,
+                "limit": 1
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_fastest_laps",
+          "path": "data.fastest_laps.0.lap"
+        },
+        "template": "It was set on lap {value}."
+      }
+    },
+    {
+      "id": "laps-russell-lap1-azerbaijan",
+      "category": "laps",
+      "kind": "answer",
+      "question": "What was George Russell's first lap time at the 2026 Azerbaijan Grand Prix?",
+      "expect": [
+        "1:52.263"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/standings/drivers/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/laps/320"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            },
+            {
+              "name": "f1_resolve_driver",
+              "arguments": {
+                "season": 2026,
+                "query": "George Russell"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_driver_laps",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17,
+                "driver_id": 320,
+                "from_lap": 1,
+                "to_lap": 1
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_driver_laps",
+          "path": "data.laps.0.time"
+        },
+        "template": "His first lap was {value} (OpenF1 enrichment, CC BY-NC-SA 4.0)."
+      }
+    },
+    {
+      "id": "laps-russell-best-azerbaijan",
+      "category": "laps",
+      "kind": "answer",
+      "question": "What was George Russell's best lap time at the 2026 Azerbaijan Grand Prix according to the lap data?",
+      "expect": [
+        "1:44.916"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/standings/drivers/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/laps/320"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            },
+            {
+              "name": "f1_resolve_driver",
+              "arguments": {
+                "season": 2026,
+                "query": "Russell"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_driver_laps",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17,
+                "driver_id": 320
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_driver_laps",
+          "path": "data.best_lap.time"
+        },
+        "template": "His best lap was {value}."
+      }
+    },
+    {
+      "id": "pit-russell-count-azerbaijan",
+      "category": "pit-stops",
+      "kind": "answer",
+      "question": "On which lap did George Russell make his pit stop at the 2026 Azerbaijan Grand Prix?",
+      "expect": [
+        "31"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/pitstops"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_pit_stops",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17,
+                "driver_code": "RUS"
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_pit_stops",
+          "path": "data.stops.*.lap"
+        },
+        "template": "He pitted on lap {value}."
+      }
+    },
+    {
+      "id": "pit-quickest-azerbaijan",
+      "category": "pit-stops",
+      "kind": "answer",
+      "question": "Who had the quickest pit stop at the 2026 Azerbaijan Grand Prix?",
+      "expect": [
+        "Nico Hulkenberg"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/pitstops"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_pit_stops",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_pit_stops",
+          "path": "data.quickest_stop.name"
+        },
+        "template": "{value} had the quickest stop."
+      }
+    },
+    {
+      "id": "pit-total-azerbaijan",
+      "category": "pit-stops",
+      "kind": "answer",
+      "question": "How many pit stops were made in total at the 2026 Azerbaijan Grand Prix?",
+      "expect": [
+        "20"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/pitstops"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_pit_stops",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_pit_stops",
+          "path": "data.stop_count"
+        },
+        "template": "{value} pit stops were made."
+      }
+    },
+    {
+      "id": "sc-azerbaijan-count",
+      "category": "race-control",
+      "kind": "answer",
+      "question": "How many safety car periods were there at the 2026 Azerbaijan Grand Prix?",
+      "expect": [
+        [
+          "2",
+          "two"
+        ]
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/safety-cars"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_safety_cars",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_safety_cars",
+          "path": "data.periods",
+          "count": true
+        },
+        "template": "There were {value} safety car periods (OpenF1 enrichment)."
+      }
+    },
+    {
+      "id": "sc-azerbaijan-first-lap",
+      "category": "race-control",
+      "kind": "answer",
+      "question": "On which lap did the first safety car come out at the 2026 Azerbaijan Grand Prix?",
+      "expect": [
+        "31"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/safety-cars"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_safety_cars",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_safety_cars",
+          "path": "data.periods.0.start_lap"
+        },
+        "template": "The first safety car came out on lap {value}."
+      }
+    },
+    {
+      "id": "sc-malaysia-vsc",
+      "category": "race-control",
+      "kind": "answer",
+      "question": "On which lap did the virtual safety car start in the 2026 race held in Malaysia?",
+      "expect": [
+        "43"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/25/safety-cars"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Malaysia"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_safety_cars",
+              "arguments": {
+                "season": 2026,
+                "api_round": 25
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_safety_cars",
+          "path": "data.periods.?type=VSC.0.start_lap"
+        },
+        "template": "The virtual safety car started on lap {value}."
+      }
+    },
+    {
+      "id": "inc-azerbaijan-dnf",
+      "category": "race-control",
+      "kind": "answer",
+      "question": "Which drivers retired from the 2026 Azerbaijan Grand Prix?",
+      "expect": [
+        "Albon",
+        "Alonso",
+        "Colapinto",
+        "Stroll",
+        "Norris",
+        "Gasly",
+        "Bottas"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/incidents"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_incidents",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_incidents",
+          "path": "data.incidents.?type=dnf.*.driver"
+        },
+        "template": "Retirements: {value}."
+      }
+    },
+    {
+      "id": "wx-azerbaijan-air",
+      "category": "weather",
+      "kind": "answer",
+      "question": "What was the air temperature at the 2026 Azerbaijan Grand Prix?",
+      "expect": [
+        "26.4"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/weather"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_weather",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_weather",
+          "path": "data.weather.air_temp_c"
+        },
+        "template": "The air temperature was {value} °C."
+      }
+    },
+    {
+      "id": "wx-azerbaijan-track",
+      "category": "weather",
+      "kind": "answer",
+      "question": "What was the track temperature at the 2026 Azerbaijan Grand Prix?",
+      "expect": [
+        "39.5"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/weather"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_weather",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_weather",
+          "path": "data.weather.track_temp_c"
+        },
+        "template": "The track temperature was {value} °C."
+      }
+    },
+    {
+      "id": "fc-singapore-favourite",
+      "category": "forecast",
+      "kind": "answer",
+      "question": "According to The Data Driver model, who is the favourite to win the 2026 Singapore Grand Prix?",
+      "expect": [
+        "Kimi Antonelli"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/predictions/race/2026/18"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Singapore Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_race_forecast",
+              "arguments": {
+                "season": 2026,
+                "api_round": 18,
+                "limit": 3
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_race_forecast",
+          "path": "data.forecast.0.name"
+        },
+        "template": "The model forecast favours {value} (a forecast, not a result)."
+      }
+    },
+    {
+      "id": "fc-singapore-win-pct",
+      "category": "forecast",
+      "kind": "answer",
+      "question": "What win probability does The Data Driver model give the favourite for the 2026 Singapore Grand Prix?",
+      "expect": [
+        [
+          "24.1%",
+          "24.1 %",
+          "24%",
+          "24 %",
+          "24 per cent"
+        ]
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/predictions/race/2026/18"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Singapore Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_race_forecast",
+              "arguments": {
+                "season": 2026,
+                "api_round": 18,
+                "limit": 1
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_race_forecast",
+          "path": "data.forecast.0.win_pct"
+        },
+        "template": "The model gives the favourite a {value}% chance of winning (a forecast)."
+      }
+    },
+    {
+      "id": "fc-singapore-pole",
+      "category": "forecast",
+      "kind": "answer",
+      "question": "Who does the qualifying forecast expect to take pole at the 2026 Singapore Grand Prix?",
+      "expect": [
+        "Kimi Antonelli"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/predictions/qualifying/2026/18"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Singapore Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_qualifying_forecast",
+              "arguments": {
+                "season": 2026,
+                "api_round": 18,
+                "limit": 3
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_qualifying_forecast",
+          "path": "data.forecast.0.name"
+        },
+        "template": "The qualifying forecast favours {value} for pole."
+      }
+    },
+    {
+      "id": "h2h-russell-antonelli-season",
+      "category": "head-to-head",
+      "kind": "answer",
+      "question": "In 2026 races, how many times has George Russell finished ahead of Kimi Antonelli, and vice versa?",
+      "expect": [
+        "5",
+        "9"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/standings/drivers/2026",
+        "https://api.thedatadriver.app/v1/f1/drivers/320/head-to-head/539"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_driver",
+              "arguments": {
+                "season": 2026,
+                "query": "George Russell"
+              }
+            },
+            {
+              "name": "f1_resolve_driver",
+              "arguments": {
+                "season": 2026,
+                "query": "Kimi Antonelli"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_head_to_head",
+              "arguments": {
+                "driver_id_1": 320,
+                "driver_id_2": 539
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_head_to_head",
+          "path": "data.races_this_season",
+          "fields": [
+            "driver1_ahead",
+            "driver2_ahead"
+          ]
+        },
+        "template": "Russell ahead / Antonelli ahead: {value}."
+      }
+    },
+    {
+      "id": "h2h-russell-antonelli-quali",
+      "category": "head-to-head",
+      "kind": "answer",
+      "question": "What is the all-time qualifying head-to-head between George Russell and Kimi Antonelli?",
+      "expect": [
+        "28",
+        "12"
+      ],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/standings/drivers/2026",
+        "https://api.thedatadriver.app/v1/f1/drivers/320/head-to-head/539"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_driver",
+              "arguments": {
+                "season": 2026,
+                "query": "Russell"
+              }
+            },
+            {
+              "name": "f1_resolve_driver",
+              "arguments": {
+                "season": 2026,
+                "query": "Antonelli"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_head_to_head",
+              "arguments": {
+                "driver_id_1": 320,
+                "driver_id_2": 539
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_head_to_head",
+          "path": "data.qualifying_all_time",
+          "fields": [
+            "driver1_ahead",
+            "driver2_ahead"
+          ]
+        },
+        "template": "Qualifying head-to-head (Russell, Antonelli): {value}."
+      }
+    },
+    {
+      "id": "ref-singapore-winner",
+      "category": "refusal",
+      "kind": "refusal",
+      "question": "Who won the 2026 Singapore Grand Prix?",
+      "expect": [],
+      "forbid": [
+        "won the singapore"
+      ],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/18/results"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Singapore Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_race_results",
+              "arguments": {
+                "season": 2026,
+                "api_round": 18
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_race_results",
+          "path": "data.__missing__"
+        },
+        "template": "{value}"
+      }
+    },
+    {
+      "id": "ref-bahrain-winner",
+      "category": "refusal",
+      "kind": "refusal",
+      "question": "Who won the 2026 Bahrain Grand Prix in Sakhir?",
+      "expect": [],
+      "forbid": [
+        "won the bahrain"
+      ],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/4/results"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Bahrain Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_race_results",
+              "arguments": {
+                "season": 2026,
+                "api_round": 4
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_race_results",
+          "path": "data.__missing__"
+        },
+        "template": "{value}"
+      }
+    },
+    {
+      "id": "ref-azerbaijan-fp1",
+      "category": "refusal",
+      "kind": "refusal",
+      "question": "What was the fastest time in FP1 at the 2026 Azerbaijan Grand Prix?",
+      "expect": [],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/17/practice/FP1/best"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Azerbaijan Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_practice_best",
+              "arguments": {
+                "season": 2026,
+                "api_round": 17,
+                "session": "FP1"
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_practice_best",
+          "path": "data.__missing__"
+        },
+        "template": "{value}"
+      }
+    },
+    {
+      "id": "ref-singapore-weather",
+      "category": "refusal",
+      "kind": "refusal",
+      "question": "What was the track temperature at the 2026 Singapore Grand Prix?",
+      "expect": [],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/18/weather"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Singapore Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_weather",
+              "arguments": {
+                "season": 2026,
+                "api_round": 18
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_weather",
+          "path": "data.__missing__"
+        },
+        "template": "{value}"
+      }
+    },
+    {
+      "id": "ref-las-vegas-pits",
+      "category": "refusal",
+      "kind": "refusal",
+      "question": "How many pit stops were made at the 2026 Las Vegas Grand Prix?",
+      "expect": [],
+      "forbid": [],
+      "sources": [
+        "https://api.thedatadriver.app/v1/f1/calendar/2026",
+        "https://api.thedatadriver.app/v1/f1/races/2026/22/pitstops"
+      ],
+      "mock": {
+        "steps": [
+          [
+            {
+              "name": "f1_resolve_race",
+              "arguments": {
+                "season": 2026,
+                "query": "Las Vegas Grand Prix"
+              }
+            }
+          ],
+          [
+            {
+              "name": "f1_pit_stops",
+              "arguments": {
+                "season": 2026,
+                "api_round": 22
+              }
+            }
+          ]
+        ],
+        "read": {
+          "tool": "f1_pit_stops",
+          "path": "data.__missing__"
+        },
+        "template": "{value}"
+      }
+    },
+    {
+      "id": "ref-salary",
+      "category": "refusal",
+      "kind": "refusal",
+      "question": "What is Max Verstappen's salary in 2026?",
+      "expect": [],
+      "forbid": [],
+      "sources": [],
+      "mock": {
+        "steps": [],
+        "template": ""
+      }
+    },
+    {
+      "id": "ref-tyres",
+      "category": "refusal",
+      "kind": "refusal",
+      "question": "Which tyre compound did George Russell start the 2026 Azerbaijan Grand Prix on?",
+      "expect": [],
+      "forbid": [],
+      "sources": [],
+      "mock": {
+        "steps": [],
+        "template": ""
+      }
+    },
+    {
+      "id": "ref-attendance",
+      "category": "refusal",
+      "kind": "refusal",
+      "question": "How many spectators attended the 2026 Monaco Grand Prix?",
+      "expect": [],
+      "forbid": [],
+      "sources": [],
+      "mock": {
+        "steps": [],
+        "template": ""
+      }
+    },
+    {
+      "id": "ref-2027-champion",
+      "category": "refusal",
+      "kind": "refusal",
+      "question": "Who will win the 2027 drivers' championship?",
+      "expect": [],
+      "forbid": [],
+      "sources": [],
+      "mock": {
+        "steps": [],
+        "template": ""
+      }
+    },
+    {
+      "id": "ref-top-speed",
+      "category": "refusal",
+      "kind": "refusal",
+      "question": "What was Max Verstappen's top speed at the 2026 Italian Grand Prix?",
+      "expect": [],
+      "forbid": [],
+      "sources": [],
+      "mock": {
+        "steps": [],
+        "template": ""
+      }
+    }
+  ]
+}
