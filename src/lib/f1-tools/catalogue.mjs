@@ -13,6 +13,11 @@
  */
 
 import { z } from "zod";
+
+// The site enforces a CSP without 'unsafe-eval'. Zod 4 probes `new Function`
+// once to decide whether to JIT-compile parsers; the probe is caught but
+// Chromium still reports a script-src violation. Jitless mode skips it.
+z.config({ jitless: true });
 import { withTrustedOfficialRounds } from "../site-display.mjs";
 import { matchDrivers, matchRaces } from "./resolve.mjs";
 

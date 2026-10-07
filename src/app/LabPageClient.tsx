@@ -64,6 +64,15 @@ const TelemetryPanel = dynamic(() => import("@/components/lab/SeasonViews").then
 });
 const CommandPalette = dynamic(() => import("@/components/lab/CommandPalette").then((module) => module.CommandPalette), { ssr: false });
 // The AI mode (and the AI SDK it needs) loads only when a visitor opens it.
+// Zod (used by the AI SDK) probes `new Function` unless it is jitless; the
+// enforced CSP has no 'unsafe-eval'. Set the shared Zod config when this
+// module loads, before any Zod copy runs (next/dynamic does not call a named
+// loader early enough). Mutate rather than replace the shared object.
+if (typeof globalThis !== "undefined") {
+  const zodGlobal = globalThis as { __zod_globalConfig?: Record<string, unknown> };
+  zodGlobal.__zod_globalConfig ??= {};
+  zodGlobal.__zod_globalConfig.jitless = true;
+}
 const AskAiPanel = dynamic(() => import("@/components/lab/AskAiPanel"), {
   ssr: false,
   loading: () => <div className="mt-5"><ViewSkeleton label="Loading AI mode" rows={3} /></div>,
