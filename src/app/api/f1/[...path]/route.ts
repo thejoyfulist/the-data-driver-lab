@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { apiBase } from "@/lib/config";
-import { isAllowedProxyPath, MAX_POST_BYTES } from "@/lib/proxy-allowlist.mjs";
+import { isAllowedProxyPath } from "@/lib/proxy-allowlist.mjs";
+import { readBoundedPostBody } from "@/lib/read-bounded-post-body.mjs";
 
 // Browser requests stay same-origin: the Lab calls /api/f1/v1/f1/..., this
 // route forwards allow-listed read paths (and the grounded chat POST) upstream.
@@ -25,8 +26,9 @@ async function proxy(request: NextRequest, path: string[]) {
   const headers = new Headers({ Accept: "application/json" });
   let body: ArrayBuffer | undefined;
   if (request.method === "POST") {
-    body = await request.arrayBuffer();
-    if (body.byteLength > MAX_POST_BYTES) return jsonError(413, "Request body too large.");
+    const boundedBody = await readBoundedPostBody(request);
+    if (boundedBody === null) return jsonError(413, "Request body too large.");
+    body = boundedBody;
     headers.set("content-type", "application/json");
   }
 
