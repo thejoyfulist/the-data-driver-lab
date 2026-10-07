@@ -103,7 +103,7 @@ test('GET/DELETE reject streams, batches reject tool fan-out, and errors use JSO
   for (let i = 0; i < 300; i += 1) assert.equal(allowMcpRequest(ip), true);
   const limitedRequest = new Request('http://localhost/api/mcp', { method: 'POST', headers: { 'x-vercel-forwarded-for': 'forged' }, body: '{}' });
   limitedRequest.socket = { remoteAddress: ip };
-  const limited = await handleMcpRequest(limitedRequest);
+  const limited = await handleMcpRequest(limitedRequest, { trustProxyHeaders: false });
   assert.equal(limited.status, 429);
   assert.equal((await limited.json()).jsonrpc, '2.0');
 });
