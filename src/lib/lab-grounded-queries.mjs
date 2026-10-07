@@ -41,34 +41,34 @@ export function normalizeChatPayload(raw) {
   };
 }
 
-/** Public website that renders the pages a grounded source can link to. */
-const SITE_URL = "https://thedatadriver.app";
-
-export function apiSourceHref(href) {
+export function apiSourceHref(href, siteUrl = "", labPath = "/lab") {
   if (typeof href !== "string" || href.includes("\\")) return null;
 
   // Normalize the proxy-prefixed form (/api/f1/v1/...) to the canonical API
   // path (/v1/...) so one mapping covers both backend and frontend hrefs.
   const path = href.startsWith("/api/f1/") ? href.slice("/api/f1".length) : href;
 
-  // Article, season, forecast and method pages are published by the website;
-  // practice and qualifying sources point back into this Lab.
+  // Article sources have a rendered page.
   const article = path.match(/^\/v1\/f1\/articles\/([^/]+)$/);
-  if (article) return `${SITE_URL}/articles/${article[1]}`;
+  if (article) return `${siteUrl}/articles/${article[1]}`;
 
-  if (path === "/v1/f1/model/info") return `${SITE_URL}/methodology`;
+  // Model methodology has a rendered page.
+  if (path === "/v1/f1/model/info") return `${siteUrl}/methodology`;
 
-  if (/^\/v1\/f1\/standings\/(drivers|constructors)\//.test(path)) return `${SITE_URL}/season`;
-  if (/^\/v1\/f1\/calendar\//.test(path)) return `${SITE_URL}/season`;
-  if (/^\/v1\/f1\/races\/\d+\/\d+\/results/.test(path)) return `${SITE_URL}/season`;
+  // Standings, calendar and race results live on the season page.
+  if (/^\/v1\/f1\/standings\/(drivers|constructors)\//.test(path)) return `${siteUrl}/season`;
+  if (/^\/v1\/f1\/calendar\//.test(path)) return `${siteUrl}/season`;
+  if (/^\/v1\/f1\/races\/\d+\/\d+\/results/.test(path)) return `${siteUrl}/season`;
 
-  if (/^\/v1\/f1\/predictions\/race\//.test(path)) return `${SITE_URL}/grid`;
+  // Race forecast lives on the grid page.
+  if (/^\/v1\/f1\/predictions\/race\//.test(path)) return `${siteUrl}/grid`;
 
-  if (/^\/v1\/f1\/races\/\d+\/\d+\/(practice|qualifying)/.test(path)) return "/";
-  if (/^\/v1\/f1\/predictions\/qualifying\//.test(path)) return "/";
+  // Practice, qualifying and qualifying forecast live in the Lab.
+  if (/^\/v1\/f1\/races\/\d+\/\d+\/(practice|qualifying)/.test(path)) return labPath;
+  if (/^\/v1\/f1\/predictions\/qualifying\//.test(path)) return labPath;
 
-  // Any other site-relative path is a page of the public website.
-  if (path.startsWith("/") && !path.startsWith("//")) return `${SITE_URL}${path}`;
+  // Any other same-origin path is already a rendered route.
+  if (path.startsWith("/") && !path.startsWith("//")) return `${siteUrl}${path}`;
   if (/^https:\/\//i.test(path)) return path;
   return null;
 }

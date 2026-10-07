@@ -285,8 +285,15 @@ const errorRoutes = new Map([
   ["/v1/f1/races/2025/13/safety-cars", 503],
 ]);
 
+const requestCounts = new Map();
 const server = createServer((request, response) => {
   const path = new URL(request.url ?? "/", `http://${host}:${port}`).pathname;
+  if (path === "/__requests") {
+    response.writeHead(200, { "Content-Type": "application/json" });
+    response.end(JSON.stringify(Object.fromEntries(requestCounts)));
+    return;
+  }
+  requestCounts.set(path, (requestCounts.get(path) ?? 0) + 1);
   if (request.method === "GET" && errorRoutes.has(path)) {
     response.writeHead(errorRoutes.get(path), { "Content-Type": "application/json" });
     response.end(JSON.stringify({ status: "error", detail: "fixture upstream outage" }));

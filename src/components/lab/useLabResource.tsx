@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { fetchLab, isDeclaredUnavailable, LabAPIError, type LabPayload } from "@/lib/lab-client";
 
 /**
@@ -36,7 +36,7 @@ interface LabResourceStore {
 
 const LabResourceContext = createContext<LabResourceStore | null>(null);
 
-export function LabResourceProvider({ seed, children }: { seed: LabSeed; children: ReactNode }) {
+export function LabResourceProvider({ seed, refreshVersion = 0, raceScope, children }: { seed: LabSeed; refreshVersion?: number; raceScope?: string | null; children: ReactNode }) {
   const [store] = useState<LabResourceStore>(() => ({
     // Failed server fetches are not seeded: the browser retries them.
     entries: new Map(
@@ -46,7 +46,28 @@ export function LabResourceProvider({ seed, children }: { seed: LabSeed; childre
     ),
     inflight: new Map(),
   }));
-  return <LabResourceContext.Provider value={store}>{children}</LabResourceContext.Provider>;
+  const [version, setVersion] = useState(0);
+  const contextValue = useMemo(() => ({ ...store, version }), [store, version]);
+  useEffect(() => {
+    if (refreshVersion === 0 || !raceScope) return;
+    // Refresh only the displayed official race views. Historical lap and
+    // telemetry enrichment is intentionally excluded from weekend polling.
+    const endpoints = [...store.entries.keys()].filter((endpoint) => endpoint.startsWith(raceScope) &&
+      /\/(fastest-laps|pitstops|safety-cars|incidents|weather)$/.test(endpoint));
+    if (!endpoints.length) return;
+    let cancelled = false;
+    void Promise.allSettled(endpoints.map((endpoint) => fetchLab<unknown>(endpoint))).then((results) => {
+      if (cancelled) return;
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled" && !isEmptyData(result.value.data)) {
+          store.entries.set(endpoints[index], { payload: result.value, errorStatus: null });
+        }
+      });
+      setVersion((current) => current + 1);
+    });
+    return () => { cancelled = true; };
+  }, [raceScope, refreshVersion, store]);
+  return <LabResourceContext.Provider value={contextValue}>{children}</LabResourceContext.Provider>;
 }
 
 function isEmptyData(data: unknown): boolean {

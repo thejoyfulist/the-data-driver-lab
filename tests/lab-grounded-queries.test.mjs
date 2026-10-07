@@ -17,7 +17,7 @@ const labServerSource = readFileSync(new URL("../src/app/page.tsx", import.meta.
 const labClientSource = readFileSync(new URL("../src/lib/lab-client.ts", import.meta.url), "utf8");
 // Practice is read from the per-session best-lap classifications;
 // this marker isolates the session request effect.
-const SESSION_EFFECT_MARKER = "/practice/${session}/best";
+const SESSION_EFFECT_MARKER = "settle(fetchLab<unknown>(`/v1/f1/races/${season}/${round}/practice/${session}/best`)";
 
 function effectContaining(marker) {
   const markerIndex = labPageSource.indexOf(marker);
@@ -192,25 +192,25 @@ test("rejects an empty 200 chat payload and routes internal citations through th
       sources: [{ title: "Driver standings 2026", href: "/v1/f1/standings/drivers/2026" }],
     },
   );
-  assert.equal(apiSourceHref("/v1/f1/standings/drivers/2026"), "https://thedatadriver.app/season");
-  assert.equal(apiSourceHref("/v1/f1/standings/constructors/2026"), "https://thedatadriver.app/season");
-  assert.equal(apiSourceHref("/v1/f1/calendar/2026"), "https://thedatadriver.app/season");
-  assert.equal(apiSourceHref("/v1/f1/calendar/next"), "https://thedatadriver.app/season");
-  assert.equal(apiSourceHref("/v1/f1/races/2026/13/results"), "https://thedatadriver.app/season");
-  assert.equal(apiSourceHref("/v1/f1/predictions/race/2026/14"), "https://thedatadriver.app/grid");
-  assert.equal(apiSourceHref("/v1/f1/predictions/qualifying/2026/14"), "/");
-  assert.equal(apiSourceHref("/v1/f1/races/2026/13/qualifying"), "/");
-  assert.equal(apiSourceHref("/v1/f1/races/2026/13/practice"), "/");
-  assert.equal(apiSourceHref("/v1/f1/model/info"), "https://thedatadriver.app/methodology");
-  assert.equal(apiSourceHref("/v1/f1/articles/analysis-20260504-historical-patterns"), "https://thedatadriver.app/articles/analysis-20260504-historical-patterns");
+  assert.equal(apiSourceHref("/v1/f1/standings/drivers/2026", "https://thedatadriver.app", "/"), "https://thedatadriver.app/season");
+  assert.equal(apiSourceHref("/v1/f1/standings/constructors/2026", "https://thedatadriver.app", "/"), "https://thedatadriver.app/season");
+  assert.equal(apiSourceHref("/v1/f1/calendar/2026", "https://thedatadriver.app", "/"), "https://thedatadriver.app/season");
+  assert.equal(apiSourceHref("/v1/f1/calendar/next", "https://thedatadriver.app", "/"), "https://thedatadriver.app/season");
+  assert.equal(apiSourceHref("/v1/f1/races/2026/13/results", "https://thedatadriver.app", "/"), "https://thedatadriver.app/season");
+  assert.equal(apiSourceHref("/v1/f1/predictions/race/2026/14", "https://thedatadriver.app", "/"), "https://thedatadriver.app/grid");
+  assert.equal(apiSourceHref("/v1/f1/predictions/qualifying/2026/14", "https://thedatadriver.app", "/"), "/");
+  assert.equal(apiSourceHref("/v1/f1/races/2026/13/qualifying", "https://thedatadriver.app", "/"), "/");
+  assert.equal(apiSourceHref("/v1/f1/races/2026/13/practice", "https://thedatadriver.app", "/"), "/");
+  assert.equal(apiSourceHref("/v1/f1/model/info", "https://thedatadriver.app", "/"), "https://thedatadriver.app/methodology");
+  assert.equal(apiSourceHref("/v1/f1/articles/analysis-20260504-historical-patterns", "https://thedatadriver.app", "/"), "https://thedatadriver.app/articles/analysis-20260504-historical-patterns");
   // Proxy-prefixed form normalizes to the same rendered route.
-  assert.equal(apiSourceHref("/api/f1/v1/f1/predictions/qualifying/2026/14"), "/");
-  assert.equal(apiSourceHref("/articles/verified-analysis"), "https://thedatadriver.app/articles/verified-analysis");
-  assert.equal(apiSourceHref("https://example.test/source"), "https://example.test/source");
-  assert.equal(apiSourceHref("javascript:alert(1)"), null);
-  assert.equal(apiSourceHref("data:text/html,unsafe"), null);
-  assert.equal(apiSourceHref("//evil.test/source"), null);
-  assert.equal(apiSourceHref("/\\\\evil.test/source"), null);
+  assert.equal(apiSourceHref("/api/f1/v1/f1/predictions/qualifying/2026/14", "https://thedatadriver.app", "/"), "/");
+  assert.equal(apiSourceHref("/articles/verified-analysis", "https://thedatadriver.app", "/"), "https://thedatadriver.app/articles/verified-analysis");
+  assert.equal(apiSourceHref("https://example.test/source", "https://thedatadriver.app", "/"), "https://example.test/source");
+  assert.equal(apiSourceHref("javascript:alert(1)", "https://thedatadriver.app", "/"), null);
+  assert.equal(apiSourceHref("data:text/html,unsafe", "https://thedatadriver.app", "/"), null);
+  assert.equal(apiSourceHref("//evil.test/source", "https://thedatadriver.app", "/"), null);
+  assert.equal(apiSourceHref("/\\\\evil.test/source", "https://thedatadriver.app", "/"), null);
 });
 
 test("renders the selected-driver head-to-head immediately after the field overview", () => {

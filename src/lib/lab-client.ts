@@ -2,7 +2,7 @@
  * Data Lab client: typed payloads for the public endpoints the Lab reads,
  * defensive normalisers, and the export helpers shared by every Lab view.
  *
- * Every field coming from the API is optional or nullable here:
+ * Every field coming from the API is optional or nullable here (rule 31):
  * a view renders "not published" rather than crashing when a field is absent.
  */
 
@@ -23,6 +23,7 @@ export interface LabSourceMeta {
   adaptation_notice?: string | null;
   data_fetched_at?: string | null;
   timestamp?: string | null;
+  cache_ttl?: number | null;
   total?: number | null;
 }
 

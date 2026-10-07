@@ -8,6 +8,7 @@ import type {
 import type { LabSeed } from "@/components/lab/useLabResource";
 import { LIVE_SEASON, SITE_URL } from "@/lib/site";
 import LabPageClient from "./LabPageClient";
+import { currentRaceWeekend } from "@/lib/lab-live-policy";
 
 export const metadata: Metadata = {
   title: "Data Lab — Explore Formula 1 data",
@@ -126,7 +127,8 @@ export default async function LabPage() {
   const lastCompletedRound = [...races]
     .reverse()
     .find((race) => race.status === "completed")?.round;
-  const initialRound = lastCompletedRound ?? nextRace?.round ?? null;
+  const weekendRace = currentRaceWeekend(races);
+  const initialRound = weekendRace?.round ?? lastCompletedRound ?? nextRace?.round ?? null;
   // Race payloads and the race views' seed are fetched in parallel.
   const [[resultPayload, predictionPayload, ingestionReadiness], initialSeed] = await Promise.all([
     initialRound
@@ -146,6 +148,7 @@ export default async function LabPage() {
   return (
     <LabPageClient
       calendar={races}
+      nextRace={nextRace}
       circuits={circuits ?? []}
       initialSeason={LIVE_SEASON}
       initialRound={initialRound}

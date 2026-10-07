@@ -16,3 +16,4 @@ export const LIVE_SEASON = 2026;
 
 /** Source repository of this application (shown in the header and footer). */
 export const REPO_URL = process.env.NEXT_PUBLIC_TDD_REPO_URL || "https://github.com/thejoyfulist/the-data-driver-lab";
+export const LAB_PATH = "/";

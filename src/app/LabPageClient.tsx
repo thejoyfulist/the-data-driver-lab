@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MotionRail } from "@/components/ui/MotionRail";
@@ -28,7 +29,8 @@ import {
 } from "@/lib/lab-client";
 import { readableTeamColor, teamColor } from "@/lib/team-colors";
 import { getCanonicalDriverCode } from "@/lib/driver-codes";
-import { LIVE_SEASON, REPO_URL } from "@/lib/site";
+import { isRaceWeekend, nextLiveInterval, raceWeekendWindow, relativeUpdate } from "@/lib/lab-live-policy";
+import { LIVE_SEASON, SITE_URL, LAB_PATH, REPO_URL } from "@/lib/site";
 import type { APICalendarRace, APIPrediction, APIRacePredictions } from "@/lib/api-types";
 import { officialRoundLabel, sortRacesChronologically } from "@/lib/site-display.mjs";
 import {
@@ -103,6 +105,7 @@ interface LabCircuit {
 
 interface LabPageClientProps {
   calendar: APICalendarRace[];
+  nextRace: APICalendarRace | null;
   circuits: LabCircuit[];
   initialSeason: number;
   initialRound: number | null;
@@ -185,7 +188,7 @@ interface IngestionReadiness {
 }
 
 function SourceCitation({ source }: { source: LabAnswer["sources"][number] }) {
-  const href = apiSourceHref(source.href);
+  const href = apiSourceHref(source.href, SITE_URL, LAB_PATH);
   const className = "rounded-full border border-white/[0.10] px-3 py-1.5 font-mono text-[10px] text-white/[0.60]";
   return href ? (
     <a href={href} className={`${className} hover:border-teal/30 hover:text-teal`}>
@@ -365,6 +368,7 @@ function buildRows(
 
 export default function LabPageClient({
   calendar: initialCalendar,
+  nextRace,
   circuits,
   initialSeason,
   initialRound,
@@ -428,6 +432,20 @@ export default function LabPageClient({
   const [hydrated, setHydrated] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [liveNow, setLiveNow] = useState<number | null>(null);
+  const [livePaused, setLivePaused] = useState(false);
+  const [liveOnline, setLiveOnline] = useState(true);
+  const [liveVisible, setLiveVisible] = useState(true);
+  const [liveTtl, setLiveTtl] = useState(60);
+  const [liveFailures, setLiveFailures] = useState(0);
+  const [liveAnnouncement, setLiveAnnouncement] = useState("");
+  const [liveHighlight, setLiveHighlight] = useState(false);
+  const [liveResourceVersion, setLiveResourceVersion] = useState(0);
+  const liveInFlight = useRef(false);
+  const liveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const livePublished = useRef(false);
+  const livePracticePublished = useRef<Set<string>>(new Set());
+  const liveWasInactive = useRef(false);
   const findInputRef = useRef<HTMLInputElement>(null);
   const answerKindRef = useRef<"starter" | "chat" | null>(null);
   const chatRequestGateRef = useRef(createLatestRequestGate());
@@ -443,6 +461,12 @@ export default function LabPageClient({
     // Interactive from here on (end-to-end tests wait for this marker).
     setHydrated(true);
   }, []);
+
+  useEffect(() => {
+    if (!liveHighlight) return;
+    const timer = setTimeout(() => setLiveHighlight(false), 200);
+    return () => clearTimeout(timer);
+  }, [liveHighlight]);
 
   const clearStarterAnswer = useCallback(() => {
     if (answerKindRef.current !== "starter") return;
@@ -516,6 +540,135 @@ export default function LabPageClient({
   }, [invalidateSemanticContext]);
 
   const selectedRace = calendar.find((race) => race.round === round) ?? null;
+  const weekendRace = calendar.find((race) => liveNow != null && isRaceWeekend(race, liveNow)) ??
+    (nextRace && liveNow != null && isRaceWeekend(nextRace, liveNow) ? nextRace : null);
+  const liveActive = weekendRace != null && season === initialSeason && round === weekendRace.round;
+  const liveStatus = !liveActive ? "Not a race weekend" : !liveOnline ? "Offline" : livePaused || !liveVisible ? "Paused" : "Live";
+  const liveTimestamp = sessionSourceMeta?.data_fetched_at ?? sessionTimestamp ?? sourceTimestamp;
+
+  useEffect(() => {
+    const sync = () => {
+      setLiveNow(Date.now());
+      setLiveOnline(navigator.onLine);
+      setLiveVisible(!document.hidden);
+    };
+    sync();
+    document.addEventListener("visibilitychange", sync);
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    return () => {
+      document.removeEventListener("visibilitychange", sync);
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
+  }, []);
+
+  const refreshLive = useCallback(async () => {
+    if (liveInFlight.current || round == null) return;
+    liveInFlight.current = true;
+    const base = `/v1/f1/races/${season}/${round}`;
+    const requests = await Promise.allSettled([
+      fetchLab<LabStanding[]>(`/v1/f1/standings/drivers/${season}`),
+      fetchLab<LabResult[]>(`${base}/results`),
+      fetchLab<IngestionReadiness>(`${base}/ingestion-readiness`),
+      fetchLab<LabQualifyingResult[] | null>(`${base}/qualifying`),
+      fetchLab<APIRacePredictions>(`/v1/f1/predictions/race/${season}/${round}`),
+      fetchLab<LabQualifyingPrediction[] | null>(`/v1/f1/predictions/qualifying/${season}/${round}`),
+      ...PRACTICE_SESSIONS.map((session) => fetchLab<unknown>(`${base}/practice/${session}/best`)),
+    ]);
+    liveInFlight.current = false;
+    const [nextStandings, nextResults, nextReadiness, nextQualifying, nextRacePrediction, nextQualifyingPrediction, ...nextPractice] = requests;
+    const valid = requests.filter((entry): entry is PromiseFulfilledResult<LabPayload<unknown>> => entry.status === "fulfilled" && entry.value.data != null);
+    if (valid.length === 0 || nextStandings.status === "rejected" || nextResults.status === "rejected") {
+      setLiveFailures((count) => count + 1);
+    } else {
+      setLiveFailures(0);
+    }
+    if (valid.length === 0) return;
+    const ttls = valid.map((entry) => entry.value.meta?.cache_ttl);
+    setLiveTtl(nextLiveInterval(ttls, 0) / 1_000);
+    if (nextStandings.status === "fulfilled" && Array.isArray(nextStandings.value.data) && nextStandings.value.data.length) {
+      setStandings(nextStandings.value.data);
+      setSeasonStandings((current) => ({ ...current, [season]: nextStandings.value.data }));
+    }
+    if (nextResults.status === "fulfilled" && Array.isArray(nextResults.value.data) && nextResults.value.data.length) {
+      setResults(nextResults.value.data);
+      setSourceTimestamp(nextResults.value.meta?.data_fetched_at ?? nextResults.value.timestamp);
+    }
+    if (nextReadiness.status === "fulfilled" && nextReadiness.value.data) setIngestionReadiness(nextReadiness.value.data);
+    if (nextRacePrediction.status === "fulfilled" && nextRacePrediction.value.data?.predictions?.length) {
+      setPredictions(nextRacePrediction.value.data);
+    }
+    if (nextQualifyingPrediction.status === "fulfilled" && Array.isArray(nextQualifyingPrediction.value.data) && nextQualifyingPrediction.value.data.length) {
+      setQualifyingPrediction(nextQualifyingPrediction.value.data);
+    }
+    if (nextQualifying.status === "fulfilled" && Array.isArray(nextQualifying.value.data) && nextQualifying.value.data.length) {
+      setQualifying(nextQualifying.value.data);
+      setSessionTimestamp(nextQualifying.value.meta?.data_fetched_at ?? nextQualifying.value.timestamp);
+      if (!livePublished.current) {
+        livePublished.current = true;
+        setLiveAnnouncement("Qualifying results published");
+        setLiveHighlight(true);
+      }
+    }
+    const practicePayloads = nextPractice.map((entry, index) => ({
+      session: PRACTICE_SESSIONS[index],
+      status: entry.status === "fulfilled" ? "ready" as const : "error" as const,
+      data: entry.status === "fulfilled" ? entry.value.data : null,
+      errorStatus: entry.status === "rejected" ? (entry.reason instanceof LabAPIError ? entry.reason.status : 0) : null,
+    }));
+    if (practicePayloads.some((entry) => entry.status === "ready" && entry.data != null)) {
+      const publishedSessions = buildPracticeBest(practicePayloads).published;
+      const newlyPublished = publishedSessions.filter((session) => !livePracticePublished.current.has(session));
+      publishedSessions.forEach((session) => livePracticePublished.current.add(session));
+      if (newlyPublished.length) {
+        setLiveAnnouncement(`${newlyPublished.join(", ")} results published`);
+        setLiveHighlight(true);
+      }
+      setPracticeBest((current) => {
+        const updated = buildPracticeBest(practicePayloads);
+        if (!current) return updated;
+        const published = new Set(updated.published);
+        return {
+          rows: [...current.rows.filter((entry) => !published.has(entry.session)), ...updated.rows],
+          published: [...new Set([...current.published, ...updated.published])],
+          unpublished: updated.unpublished.filter((entry) => !current.published.includes(entry.session)),
+          failed: updated.failed.filter((entry) => !current.published.includes(entry.session)),
+        };
+      });
+    }
+    setLiveNow(Date.now());
+    setLiveResourceVersion((current) => current + 1);
+  }, [round, season]);
+
+  useEffect(() => {
+    if (liveTimer.current) clearTimeout(liveTimer.current);
+    const now = liveNow ?? 0;
+    const window = raceWeekendWindow(weekendRace ?? nextRace);
+    if (!liveActive || !liveOnline || !liveVisible || livePaused) {
+      // A page left open before Friday wakes at the boundary without polling.
+      if (!liveActive && window && now < window.start) liveTimer.current = setTimeout(() => setLiveNow(Date.now()), Math.min(window.start - now, 2_147_483_647));
+      return;
+    }
+    const interval = nextLiveInterval([liveTtl], liveFailures);
+    const delay = Math.min(interval, Math.max(0, (window?.end ?? now) - now));
+    liveTimer.current = setTimeout(() => {
+      if (window && Date.now() >= window.end) { setLiveNow(Date.now()); return; }
+      void refreshLive();
+    }, delay);
+    return () => { if (liveTimer.current) clearTimeout(liveTimer.current); };
+  }, [liveActive, liveFailures, liveNow, liveOnline, livePaused, liveTtl, liveVisible, nextRace, refreshLive, weekendRace]);
+
+  useEffect(() => {
+    const ready = liveActive && liveOnline && liveVisible && !livePaused;
+    if (ready && liveWasInactive.current) {
+      void refreshLive();
+    }
+    if (!ready && liveActive) liveWasInactive.current = true;
+    if (ready) liveWasInactive.current = false;
+    // Only a return from pause, hidden tab or offline triggers an immediate request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveActive, liveOnline, liveVisible, livePaused]);
   // Visible numbering is the official formula1.com round (cancelled rounds
   // excluded); `round` stays the internal API key.
   const selectedRoundLabel = officialRoundLabel(selectedRace);
@@ -820,13 +973,16 @@ export default function LabPageClient({
         } else {
           setSessionError(null);
         }
-        setPracticeBest(buildPracticeBest(nextPractice.map((payload, index) => ({
+        const initialPractice = buildPracticeBest(nextPractice.map((payload, index) => ({
           session: PRACTICE_SESSIONS[index],
           status: payload.failedStatus !== null ? "error" : "ready",
           data: payload.data,
           errorStatus: payload.failedStatus,
-        }))));
+        })));
+        initialPractice.published.forEach((session) => livePracticePublished.current.add(session));
+        setPracticeBest(initialPractice);
         setQualifying(Array.isArray(nextQualifying.data) ? nextQualifying.data : []);
+        livePublished.current = Array.isArray(nextQualifying.data) && nextQualifying.data.length > 0;
         setQualifyingPrediction(Array.isArray(nextPrediction.data) ? nextPrediction.data : []);
         setQualifyingWithheld(nextQualifying.failedStatus === 409);
         const practiceWithMeta = nextPractice.find((payload) => payload.meta?.data_fetched_at) ?? nextPractice.find((payload) => payload.meta);
@@ -1284,13 +1440,15 @@ export default function LabPageClient({
   }));
 
   return (
-    <LabResourceProvider seed={initialSeed}>
+    <LabResourceProvider seed={initialSeed} refreshVersion={liveResourceVersion} raceScope={liveActive && round != null ? `/v1/f1/races/${season}/${round}/` : null}>
     <div className="min-h-[calc(100vh-3.5rem)] bg-dark" data-lab-hydrated={hydrated ? "true" : undefined}>
       <div className="mx-auto max-w-[1480px] px-4 pb-20 pt-4 md:px-8 md:pt-10">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 md:mb-8">
-          <a href={REPO_URL} className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/[0.66] hover:text-light">
-            Open source · MIT
-          </a>
+          {SITE_URL ? (
+            <a href={REPO_URL} className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/[0.66] hover:text-light">Open source · MIT</a>
+          ) : (
+            <Link href="/" className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/[0.66] hover:text-light">← Dashboard</Link>
+          )}
           <div className="flex items-center gap-3">
             <span className="hidden items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] sm:flex">
               <span className="h-1.5 w-1.5 rounded-full bg-teal" />
@@ -1298,6 +1456,14 @@ export default function LabPageClient({
               <span className="text-white/[0.60]">/</span>
               <span className="text-white/[0.66]">Data Lab</span>
             </span>
+            {!SITE_URL && <a
+              href={REPO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden min-h-9 items-center rounded-md border border-white/[0.12] px-3 font-mono text-[11px] uppercase tracking-[0.08em] text-white/[0.72] hover:border-white/[0.24] hover:text-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 sm:inline-flex"
+            >
+              Open source ↗
+            </a>}
             <button
               type="button"
               onClick={() => setPaletteOpen(true)}
@@ -1311,7 +1477,7 @@ export default function LabPageClient({
           </div>
         </div>
 
-        <header className="mb-4 max-w-4xl md:mb-8">
+        <header className="mb-2 max-w-4xl md:mb-8">
           <p className="section-index mb-2 hidden text-teal md:block">RACE LAB</p>
           <h1 className="font-serif text-[clamp(2rem,4.2vw,3.75rem)] leading-[0.95] tracking-[-0.04em] text-light">
             Work with <span className="text-teal">the race data.</span>
@@ -1319,6 +1485,14 @@ export default function LabPageClient({
           <p className="mt-3 hidden max-w-3xl text-body leading-relaxed text-white/[0.66] md:block">
             Pick a race, change the lens, compare the field. Every view is built from the public F1 API, can be exported, and shows the request behind it. Unavailable data stays unavailable.
           </p>
+          <div className={`mt-1 flex flex-wrap items-center gap-3 rounded-lg border px-2 py-0.5 font-mono text-[11px] transition-colors duration-200 md:mt-4 md:px-3 md:py-2 ${liveHighlight && !reducedMotion ? "border-teal/30 bg-teal/[0.06]" : "border-white/[0.10] bg-white/[0.02]"}`} data-testid="lab-live-status" data-live-next-interval={liveActive ? nextLiveInterval([liveTtl], liveFailures) : undefined}>
+            <span className={`h-1.5 w-1.5 rounded-full ${liveStatus === "Live" ? "bg-teal" : liveStatus === "Offline" ? "bg-amber-400" : "bg-white/40"}`} aria-hidden="true" />
+            <span className="text-light">{liveStatus}</span>
+            {relativeUpdate(liveTimestamp, liveNow ?? 0) && <span className="text-white/[0.62]">{relativeUpdate(liveTimestamp, liveNow ?? 0)}</span>}
+            {liveActive && <button type="button" onClick={() => setLivePaused((paused) => !paused)} className="rounded border border-white/[0.14] px-2 py-1 text-white/[0.80] hover:border-teal/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70">{livePaused ? "Resume" : "Pause"}</button>}
+            {liveActive && <button type="button" onClick={() => void refreshLive()} disabled={!liveOnline || liveInFlight.current} className="rounded border border-white/[0.14] px-2 py-1 text-white/[0.80] hover:border-teal/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 disabled:opacity-40">Refresh now</button>}
+            <span className="sr-only" aria-live="polite" aria-atomic="true">{liveAnnouncement}</span>
+          </div>
         </header>
 
         {(seasonError || raceError || sessionError || historicalSeasonError) && (
