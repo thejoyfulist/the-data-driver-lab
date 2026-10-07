@@ -20,6 +20,7 @@ import {
   constructorInsights,
   fastestLapFigure,
   formatLapTime,
+  formatShortLapTime,
   neutralisationFigure,
   raceInsights,
   raceLaps,
@@ -114,6 +115,29 @@ test("fastest lap is the minimum published time; missing times are never guessed
   assert.equal(fastestLapFigure([{ last_name: "Norris", time_ms: null }]).state, "unavailable");
   assert.equal(formatLapTime(58_123), "58.123s");
   assert.equal(formatLapTime(null), null);
+  // The published text is never trusted: an inconsistent time_formatted is ignored.
+  assert.equal(fastestLapFigure([{ last_name: "Russell", time_ms: 91_130, time_formatted: "1:30.1130", lap: 53 }]).value, "1:31.130");
+});
+
+test("lap times are formatted from milliseconds, carrying into seconds and minutes", () => {
+  assert.equal(formatLapTime(90_500), "1:30.500");
+  assert.equal(formatLapTime(91_130), "1:31.130"); // crosses a second
+  assert.equal(formatLapTime(91_000), "1:31.000");
+  assert.equal(formatLapTime(59_999), "59.999s");
+  assert.equal(formatLapTime(60_000), "1:00.000"); // crosses a minute
+  assert.equal(formatLapTime(119_999.6), "2:00.000"); // rounding carries into the minute
+  assert.equal(formatLapTime(65_004), "1:05.004");
+  assert.equal(formatLapTime(3_723_045), "62:03.045");
+  assert.equal(formatLapTime(999), "0.999s");
+  for (const missing of [null, undefined, 0, -1, Number.NaN, Number.POSITIVE_INFINITY, "91130"]) {
+    assert.equal(formatLapTime(missing), null, String(missing));
+  }
+  assert.equal(formatShortLapTime(91_130), "1:31.1");
+  assert.equal(formatShortLapTime(119_960), "2:00.0"); // never "1:60.0"
+  assert.equal(formatShortLapTime(59_960), "1:00.0");
+  assert.equal(formatShortLapTime(58_123), "58.1s");
+  assert.equal(formatShortLapTime(61_049), "1:01.0");
+  assert.equal(formatShortLapTime(null), null);
 });
 
 test("neutralisations count safety cars and VSCs separately", () => {

@@ -83,6 +83,8 @@ test("one view at a time: the URL carries it, Back restores it, deep links open 
   await openLab(page, "/?view=fastest&season=2026&round=13");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Fastest lap per driver");
   await expect(page.locator("#lab-fastest")).toContainText("Norris");
+  await expect(page.locator("#lab-fastest li", { hasText: "Russell" })).toContainText("1:31.130");
+  await expect(page.locator("#lab-fastest li", { hasText: "Hamilton" })).toContainText("1:31.340");
   // Links shared before the workspace (#anchor) still land on their view.
   await openLab(page, "/#lab-strategy");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Pit stops and stints");
@@ -105,6 +107,10 @@ test("race report: key figures computed from the API, exact against the fixture"
   await expect(figure("neutralised").locator("[data-figure-detail]")).toHaveText("1 safety car · 1 VSC");
 
   await expect(report.locator("#lab-fastest li")).toHaveCount(5);
+  // Secondary rows: times that cross a second are computed from time_ms.
+  await expect(report.locator("#lab-fastest li", { hasText: "Russell" })).toContainText("1:31.130");
+  await expect(report.locator("#lab-fastest li", { hasText: "Hamilton" })).toContainText("1:31.340");
+  await expect(report.locator("#lab-fastest")).not.toContainText(/1:30\.\d{4}/);
   await expect(report.locator("#lab-timeline [data-retirements]")).toContainText("Fixture Driver (lap not published)");
   await expect(report.locator("#lab-report-standings")).toContainText("Championship after R11");
   await expect(report.locator("[data-provenance]")).toContainText("2026 / R11");
@@ -171,6 +177,20 @@ test("charts: synchronised lap cursor with values, keyboard reading, clickable l
   await expect(pace.locator("svg path[stroke-dasharray]")).toHaveCount(1);
 });
 
+test("line charts name both axes in the SVG (race pace, championship)", async ({ page }) => {
+  await openLab(page, "/?view=pace&season=2026&round=13");
+  const paceChart = page.locator("#lab-pace svg[role=img]").first();
+  await expect(paceChart.locator("[data-axis-label=x]")).toHaveText("Lap");
+  await expect(paceChart.locator("[data-axis-label=y]")).not.toHaveText("");
+  await showView(page, "Championship");
+  const championshipChart = page.locator("[data-line-chart] svg[role=img]").first();
+  await expect(championshipChart.locator("[data-axis-label=x]")).toHaveText("Round");
+  await expect(championshipChart.locator("[data-axis-label=y]")).toHaveText("Points");
+  // Readable: the axis title is drawn inside the SVG at 12 px or more.
+  const fontSize = await championshipChart.locator("[data-axis-label=x]").evaluate((node) => Number(node.getAttribute("font-size")));
+  expect(fontSize).toBeGreaterThanOrEqual(12);
+});
+
 test("end-of-line labels never overlap", async ({ page }) => {
   await openLab(page, "/?view=pace&season=2026&round=13");
   const labels = page.locator("#lab-pace [data-end-label]");
@@ -196,6 +216,8 @@ test("the ⋯ menu exports the view and copies its request; </> API reveals the 
   const csv = await readFile(await download.path(), "utf8");
   expect(csv.split("\n")[0]).toContain("driver_code");
   expect(csv.trim().split("\n")).toHaveLength(6);
+  expect(csv).toContain("91130,1:31.130");
+  expect(csv).not.toMatch(/1:30\.\d{4}/);
 
   await fastest.getByRole("button", { name: "More actions for Fastest lap per driver" }).click();
   await page.keyboard.press("ArrowDown");

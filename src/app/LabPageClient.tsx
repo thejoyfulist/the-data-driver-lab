@@ -278,13 +278,6 @@ function formatValue(metric: Metric, value: number | null) {
   return value.toFixed(0);
 }
 
-function formatLapTime(value: number | null) {
-  if (value == null) return "—";
-  const totalSeconds = value / 1000;
-  const minutes = Math.floor(totalSeconds / 60);
-  return `${minutes}:${(totalSeconds - minutes * 60).toFixed(3).padStart(6, "0")}`;
-}
-
 function driverTla(firstName: string, lastName: string) {
   const normalized = lastName
     .normalize("NFD")

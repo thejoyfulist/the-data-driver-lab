@@ -51,7 +51,7 @@ interface LineChartProps {
   showDelta?: boolean;
 }
 
-const MARGIN = { top: 26, right: 60, bottom: 30, left: 56 };
+const MARGIN = { top: 26, right: 60, bottom: 46, left: 56 };
 const LABEL_GAP = 15;
 const DASH = "6 4";
 
@@ -233,7 +233,8 @@ export function LineChart({
               {formatX(tick)}
             </text>
           ))}
-          <text x={4} y={12} fontSize="12" fill="rgba(255,255,255,0.62)">{yLabel}</text>
+          <text x={width - MARGIN.right} y={height - 6} textAnchor="end" fontSize="12" fill="rgba(255,255,255,0.62)" data-axis-label="x">{xLabel}</text>
+          <text x={4} y={12} fontSize="12" fill="rgba(255,255,255,0.62)" data-axis-label="y">{yLabel}</text>
           {cursorInDomain && (
             <line x1={cursorLeft} x2={cursorLeft} y1={MARGIN.top} y2={height - MARGIN.bottom} stroke="rgba(215,222,232,0.35)" data-chart-cursor={activeX ?? undefined} />
           )}

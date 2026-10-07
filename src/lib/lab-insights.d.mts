@@ -36,6 +36,7 @@ interface ConstructorLike {
 }
 
 export declare function formatLapTime(ms: number | null | undefined): string | null;
+export declare function formatShortLapTime(ms: number | null | undefined): string | null;
 export declare function raceLaps(results: readonly ResultLike[] | null | undefined): number | null;
 export declare function winnerFigure(results: readonly ResultLike[] | null | undefined): KeyFigure;
 export declare function biggestGainFigure(results: readonly ResultLike[] | null | undefined): KeyFigure;

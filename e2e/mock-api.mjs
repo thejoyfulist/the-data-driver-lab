@@ -170,6 +170,14 @@ const routes = new Map([
   })],
 ]);
 
+// "1:31.130" from milliseconds, written independently of the app's formatter
+// so the e2e tests compare the page against a second computation.
+function fixtureLapText(ms) {
+  const minutes = Math.floor(ms / 60_000);
+  const seconds = Math.floor((ms % 60_000) / 1000);
+  return `${minutes}:${String(seconds).padStart(2, "0")}.${String(ms % 1000).padStart(3, "0")}`;
+}
+
 // Data Lab race views: laps, pit stops, fastest laps, safety
 // cars, incidents, weather, head-to-head and an empty practice session.
 function fixtureLaps(code, first, last, offsetMs, pitLap) {
@@ -199,7 +207,7 @@ routes.set("/v1/f1/races/2026/13/fastest-laps", envelope({
   year: 2026,
   round: 13,
   availability: "completed",
-  fastest_laps: drivers.map(([, code, name], index) => ({ rank: index + 1, driver_code: code, first_name: String(name).split(" ")[0], last_name: String(name).split(" ").slice(1).join(" "), lap: 50 + index, time_ms: 90_500 + index * 210, time_formatted: `1:30.${String(500 + index * 210).padStart(3, "0")}`, gap_ms: index * 210 })),
+  fastest_laps: drivers.map(([, code, name], index) => ({ rank: index + 1, driver_code: code, first_name: String(name).split(" ")[0], last_name: String(name).split(" ").slice(1).join(" "), lap: 50 + index, time_ms: 90_500 + index * 210, time_formatted: fixtureLapText(90_500 + index * 210), gap_ms: index * 210 })),
 }));
 routes.set("/v1/f1/races/2026/13/safety-cars", withMeta(envelope([{ type: "SC", start_lap: 9, end_lap: 12, reason: null }, { type: "VSC", start_lap: 43, end_lap: null, reason: null }]), openf1Meta));
 routes.set("/v1/f1/races/2026/13/incidents", withMeta(envelope([{ type: "safety_car", incident_type: "SC", lap: 9, description: null }, { type: "dnf", driver: "Fixture Driver", description: "DNF" }]), openf1Meta));

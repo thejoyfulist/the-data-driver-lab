@@ -26,13 +26,29 @@ function naturalList(items) {
   return items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
-/** "1:30.500" (or "58.123s" under a minute); null when the time is missing. */
+/**
+ * The one lap-time format of the Lab: "1:31.130" (or "58.123s" under a
+ * minute), computed from milliseconds in integers so a time never shows
+ * 60 seconds or 1000 milliseconds. Null when the time is missing or not
+ * positive. The API's `time_formatted` is never displayed or exported.
+ */
 export function formatLapTime(ms) {
   if (!isNumber(ms) || ms <= 0) return null;
-  const totalSeconds = ms / 1000;
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = (totalSeconds - minutes * 60).toFixed(3).padStart(6, "0");
-  return minutes > 0 ? `${minutes}:${seconds}` : `${totalSeconds.toFixed(3)}s`;
+  const total = Math.round(ms);
+  const minutes = Math.floor(total / 60_000);
+  const seconds = Math.floor((total % 60_000) / 1000);
+  const millis = String(total % 1000).padStart(3, "0");
+  return minutes > 0 ? `${minutes}:${String(seconds).padStart(2, "0")}.${millis}` : `${seconds}.${millis}s`;
+}
+
+/** Axis form of a lap time, to the tenth: "1:31.1" (or "58.1s"); rounding carries into the minute. */
+export function formatShortLapTime(ms) {
+  if (!isNumber(ms) || ms <= 0) return null;
+  const tenths = Math.round(ms / 100);
+  const minutes = Math.floor(tenths / 600);
+  const seconds = Math.floor((tenths % 600) / 10);
+  const tenth = tenths % 10;
+  return minutes > 0 ? `${minutes}:${String(seconds).padStart(2, "0")}.${tenth}` : `${seconds}.${tenth}s`;
 }
 
 /** Race distance: the most laps completed by any classified driver. */
@@ -68,7 +84,7 @@ export function fastestLapFigure(laps) {
   const timed = (Array.isArray(laps) ? laps : []).filter((lap) => isNumber(lap?.time_ms) && lap.time_ms > 0);
   if (timed.length === 0) return { state: "unavailable", reason: "No timed fastest lap is published for this race." };
   const best = [...timed].sort((a, b) => a.time_ms - b.time_ms)[0];
-  const value = (typeof best.time_formatted === "string" && best.time_formatted.trim()) || formatLapTime(best.time_ms);
+  const value = formatLapTime(best.time_ms);
   const who = best.last_name || best.driver_code || "Driver not published";
   return { state: "ok", value, detail: `${who} · ${isNumber(best.lap) ? `lap ${best.lap}` : "lap not published"}`, code: best.driver_code ?? null };
 }

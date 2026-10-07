@@ -23,6 +23,12 @@ All notable changes to this project are documented here. The format follows
 - Charts: shared cursor across charts on the same axis (hover and keyboard) with a values tooltip,
   non-overlapping end labels, clickable legend.
 
+### Fixed
+
+- Line charts draw their horizontal axis title again.
+- Lap times are always formatted from `time_ms` with one tested formatter (the published `time_formatted`
+  text is no longer displayed or exported); axis times carry rounding into the minute.
+
 - Optional "AI — your own key" mode in Ask the data: Anthropic, OpenAI, OpenRouter, Groq, Ollama or any
   OpenAI-compatible endpoint, called directly from the browser (Vercel AI SDK). The grounded endpoint stays
   the default. Key in `sessionStorage` by default, opt-in "Remember on this device", "Forget key".

@@ -6,6 +6,7 @@
  * a view renders "not published" rather than crashing when a field is absent.
  */
 
+import { formatLapTime } from "./lab-insights.mjs";
 import { withTrustedOfficialRounds } from "./site-display.mjs";
 
 /** Browser requests stay same-origin through the Next proxy (/api/f1/...). */
@@ -264,12 +265,9 @@ export function isFiniteNumber(value: unknown): value is number {
 
 // ── Formatting ──────────────────────────────────────────────────────────
 
+/** Lap or pit-lane time from milliseconds (see formatLapTime); "Not published" when missing. */
 export function formatLapMs(value: number | null | undefined): string {
-  if (!isFiniteNumber(value)) return "Not published";
-  const totalSeconds = value / 1000;
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = (totalSeconds - minutes * 60).toFixed(3).padStart(6, "0");
-  return minutes > 0 ? `${minutes}:${seconds}` : `${(value / 1000).toFixed(3)}s`;
+  return formatLapTime(value) ?? "Not published";
 }
 
 export function formatUtcTimestamp(value: string | null | undefined): string | null {

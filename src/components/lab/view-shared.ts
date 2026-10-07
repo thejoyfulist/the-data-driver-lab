@@ -1,5 +1,6 @@
 import type { LabRaceResult } from "@/lib/lab-client";
 import { driverKey } from "@/lib/lab-analytics";
+import { formatShortLapTime } from "@/lib/lab-insights.mjs";
 
 /**
  * Types and small helpers shared by the race views (LabViews, server
@@ -63,9 +64,7 @@ export function dashTeammates<T extends { team: string }>(items: readonly T[]): 
 }
 
 export function shortLapTime(ms: number): string {
-  const seconds = ms / 1000;
-  const minutes = Math.floor(seconds / 60);
-  return minutes ? `${minutes}:${(seconds - minutes * 60).toFixed(1).padStart(4, "0")}` : `${seconds.toFixed(1)}s`;
+  return formatShortLapTime(ms) ?? "—";
 }
 
 export const tableHead = "border-b border-white/[0.08] text-[12px] font-medium text-white/[0.70]";

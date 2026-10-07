@@ -25,6 +25,7 @@ import {
   type LabSafetyCar,
   type LabWeather,
 } from "@/lib/lab-client";
+import { formatLapTime } from "@/lib/lab-insights.mjs";
 import { readableTeamColor, teamColor } from "@/lib/team-colors";
 import { LineChart, type LineSeries } from "./charts/LineChart";
 import { RaceTimeline } from "./charts/RaceTimeline";
@@ -293,12 +294,12 @@ export function FastestLapsView({ context, variant, limit, onShowAll }: { contex
       color: teamColor(team),
       textColor: readableTeamColor(team),
       value: lap.gapMs,
-      display: lap.time_formatted ?? formatLapMs(lap.time_ms),
+      display: formatLapMs(lap.time_ms),
       note: lap.gapMs === 0 ? `lap ${lap.lap ?? "—"}` : `+${(lap.gapMs / 1000).toFixed(3)}${variant === "card" ? "" : "s"}${lap.gapComputed ? " (from times)" : ""}`,
       selected: selected.size ? selected.has((lap.driver_code ?? "").toUpperCase()) : undefined,
     };
   });
-  const exportRows = laps.map((lap) => ({ season: context.season, race: context.raceLabel, rank: lap.rank, driver_code: lap.driver_code, driver: `${lap.first_name ?? ""} ${lap.last_name ?? ""}`.trim(), lap: lap.lap, time_ms: lap.time_ms, time: lap.time_formatted, gap_ms: lap.gapMs, gap_source: lap.gapComputed ? "computed from lap times" : "published" }));
+  const exportRows = laps.map((lap) => ({ season: context.season, race: context.raceLabel, rank: lap.rank, driver_code: lap.driver_code, driver: `${lap.first_name ?? ""} ${lap.last_name ?? ""}`.trim(), lap: lap.lap, time_ms: lap.time_ms, time: formatLapTime(lap.time_ms), gap_ms: lap.gapMs, gap_source: lap.gapComputed ? "computed from lap times" : "published" }));
 
   return (
     <ViewCard
