@@ -17,11 +17,13 @@
     "eval:ai": "node scripts/ai-eval/run.mjs",
     "eval:ai:truth": "node scripts/ai-eval/build-truth.mjs",
     "test:e2e": "playwright test",
-    "check": "npm run lint && npm run typecheck && npm test && npm run build"
+    "check": "npm run lint && npm run typecheck && npm test && npm run build",
+    "mcp:stdio": "node scripts/mcp-stdio.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.74",
     "@ai-sdk/openai-compatible": "^3.0.65",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "ai": "^7.0.130",
     "framer-motion": "^12.36.0",
     "next": "16.3.8",

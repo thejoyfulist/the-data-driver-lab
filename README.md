@@ -41,6 +41,10 @@ Unavailable data stays unavailable — nothing is guessed or back-filled.
 
 ![The Data Lab on mobile](docs/screenshots/lab-mobile.png)
 
+## Claude and ChatGPT
+
+Connect Claude or ChatGPT to the read-only MCP endpoint at `https://thedatadriver.app/api/mcp`, or run `npm run mcp:stdio` locally after installing dependencies. See [MCP setup and data licences](docs/MCP.md).
+
 ## Quick start
 
 Requirements: Node.js 20.9 or later (22 LTS recommended) and npm.
