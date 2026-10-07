@@ -373,6 +373,91 @@ export const F1_TOOLS = [
     },
   },
   {
+    name: "f1_stints",
+    title: "Tyre strategy",
+    description: "Tyre stints of a race per driver: compound (SOFT, MEDIUM, HARD, INTERMEDIATE, WET or UNKNOWN), start and end lap, laps and tyre age at the start of the stint, with the compound sequence. stint_changes counts stint boundaries in the OpenF1 stints (not pit stops: a tyre change under a red flag or a missing stint changes it); pit_stops is the driver's count in the official formula1.com pit-stop summary, or null when that summary is unavailable. Optionally one driver code. Stints are non-official OpenF1 enrichment.",
+    inputSchema: raceInput.extend({ driver_code: z.string().regex(/^[A-Za-z]{3}$/).optional().describe("Three-letter driver code, e.g. NOR."), limit: limit(10, 22) }),
+    kind: "openf1_enrichment",
+    path: racePath("stints"),
+    // The official pit-stop summary, read alongside so stops are never
+    // inferred from stint boundaries.
+    related: (input) => ({ pitstops: racePath("pitstops")(input) }),
+    shape: (data, input, related = {}) => {
+      const code = input.driver_code?.toUpperCase();
+      const all = rowsOf(data?.drivers).filter((row) => !code || text(row.driver_code)?.toUpperCase() === code);
+      const { rows, truncated } = boundRows(all, input.limit ?? 10);
+      const summary = related.pitstops;
+      const officialStops = summary?.ok && Array.isArray(summary.data) ? summary.data : null;
+      const stopsOf = (row) => {
+        if (!officialStops) return null;
+        const driver = text(row.driver_code)?.toUpperCase();
+        return driver ? officialStops.filter((stop) => text(stop.driver_code)?.toUpperCase() === driver).length : null;
+      };
+      return {
+        race_laps: data?.race_laps ?? null,
+        pit_stops_source: officialStops
+          ? "formula1.com pit-stop summary (/pitstops)"
+          : `Official pit-stop summary unavailable${summary?.status ? ` (HTTP ${summary.status})` : ""}; pit_stops is null and is never inferred from stint changes.`,
+        drivers: rows.map((row) => {
+          const stints = rowsOf(row.stints).slice(0, 12).map((stint) => ({
+            stint: stint.stint_number ?? null, compound: text(stint.compound), start_lap: stint.start_lap ?? null, end_lap: stint.end_lap ?? null,
+            laps: stint.laps ?? null, tyre_age_at_start: stint.tyre_age_at_start ?? null,
+          }));
+          return {
+            ...driverRow(row), team: text(row.team_name),
+            sequence: stints.map((stint) => stint.compound ?? "UNKNOWN").join("-") || null,
+            stint_changes: Math.max(0, stints.length - 1),
+            pit_stops: stopsOf(row),
+            stints,
+          };
+        }),
+        truncated,
+      };
+    },
+  },
+  {
+    name: "f1_positions",
+    title: "Positions lap by lap",
+    description: "Running order of a race: per driver grid, finish, position after lap 1, best and worst running position and places gained from the grid. Pass driver_code with from_lap/to_lap (at most 20 laps; lap 0 = grid) to list that driver's position on each lap. Missing laps are never interpolated. Non-official OpenF1 enrichment; finishing positions remain official.",
+    inputSchema: raceInput.extend({
+      driver_code: z.string().regex(/^[A-Za-z]{3}$/).optional().describe("Three-letter driver code, e.g. NOR."),
+      from_lap: z.number().int().min(0).max(100).optional().describe("First lap to list (0 = grid). Needs driver_code."),
+      to_lap: z.number().int().min(0).max(100).optional().describe("Last lap to list (at most 20 laps after from_lap)."),
+      limit: limit(22, 30),
+    }),
+    kind: "openf1_enrichment",
+    path: racePath("positions"),
+    shape: (data, input) => {
+      const code = input.driver_code?.toUpperCase();
+      const all = rowsOf(data?.drivers).filter((row) => !code || text(row.driver_code)?.toUpperCase() === code);
+      const { rows, truncated } = boundRows(all, input.limit ?? 22);
+      const from = code ? input.from_lap : undefined;
+      const to = from == null ? null : Math.min(input.to_lap ?? from + 19, from + 19);
+      return {
+        method: text(data?.method),
+        race_laps: data?.race_laps ?? null,
+        drivers: rows.map((row) => {
+          const points = rowsOf(row.positions).filter((point) => isNumber(point.lap) && isNumber(point.position));
+          const running = points.filter((point) => point.lap >= 1).map((point) => point.position);
+          const grid = isNumber(row.grid) ? row.grid : points.find((point) => point.lap === 0)?.position ?? null;
+          const finish = isNumber(row.finish) ? row.finish : null;
+          return {
+            ...driverRow(row), team: text(row.team_name), grid, finish,
+            lap_1: points.find((point) => point.lap === 1)?.position ?? null,
+            best_running: running.length ? Math.min(...running) : null,
+            worst_running: running.length ? Math.max(...running) : null,
+            places_gained: grid != null && grid > 0 && finish != null ? grid - finish : null,
+            laps_with_position: points.length,
+            laps: from == null ? undefined : points
+              .filter((point) => point.lap >= from && point.lap <= to)
+              .map((point) => ({ lap: point.lap, position: point.position })),
+          };
+        }),
+        truncated,
+      };
+    },
+  },
+  {
     name: "f1_safety_cars",
     title: "Safety cars",
     description: "Safety car and virtual safety car periods of a race (type, start lap, end lap, reason when published).",
@@ -546,6 +631,21 @@ export function createF1ToolRunner({ fetchJson, publicOrigin = DEFAULT_PUBLIC_AP
   }
 
   /**
+   * Companion datasets a tool reads next to its main path (e.g. the official
+   * pit-stop summary for f1_stints): `{ key: { ok, status, data } }`. A
+   * failure is passed on as `ok: false`, never as an empty dataset.
+   */
+  async function loadRelated(paths) {
+    const entries = await Promise.all(Object.entries(paths).map(async ([key, path]) => {
+      const { status, body } = await load(path);
+      const envelope = body && typeof body === "object" ? body : {};
+      const ok = status >= 200 && status < 300 && envelope.status !== "error";
+      return [key, { ok, status, data: ok ? envelope.data ?? null : null }];
+    }));
+    return Object.fromEntries(entries);
+  }
+
+  /**
    * Run one tool. Never throws: invalid input, HTTP errors and network
    * failures come back as `{ ok: false, error }` the model can report.
    */
@@ -571,7 +671,7 @@ export function createF1ToolRunner({ fetchJson, publicOrigin = DEFAULT_PUBLIC_AP
     if (data == null) {
       return { tool: name, ok: true, data: null, empty: true, note: "The API published no data for this request.", source };
     }
-    const shaped = tool.shape(data, input);
+    const shaped = tool.shape(data, input, tool.related ? await loadRelated(tool.related(input)) : undefined);
     const { truncated, ...rest } = shaped;
     const result = { tool: name, ok: true, ...availabilityOf(data), data: rest, ...(truncated ? { truncated } : {}), source };
     return fitResult(result);

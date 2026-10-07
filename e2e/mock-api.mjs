@@ -203,6 +203,91 @@ routes.set("/v1/f1/races/2026/13/pitstops", envelope([
   { stop: 1, lap: 18, duration_ms: 23_000, first_name: "George", last_name: "Russell", driver_code: "RUS", source: "formula1.com/pit-stop-summary" },
   { stop: 2, lap: 40, duration_ms: 21_800, first_name: "George", last_name: "Russell", driver_code: "RUS", source: "formula1.com/pit-stop-summary" },
 ]));
+// Lot H contract (/stints, /positions): consistent with the results above
+// (57 laps, finish = classification, lap 0 = grid) and with the pit stops
+// (a stint ends on the lap of the stop). Hamilton's stop is not in the
+// pit-stop summary, so the Lab marks it as a stint change.
+const fixtureIdentity = (driverId) => {
+  const [id, code, name] = drivers.find(([candidate]) => candidate === driverId);
+  const team = ["McLaren", "McLaren", "Red Bull Racing", "Mercedes", "Ferrari"][drivers.findIndex(([candidate]) => candidate === driverId)];
+  return { driver_id: id, driver_code: code, first_name: String(name).split(" ")[0], last_name: String(name).split(" ").slice(1).join(" "), team_name: team };
+};
+const stint = (stint_number, compound, start_lap, end_lap, tyre_age_at_start) => ({ stint_number, compound, start_lap, end_lap, laps: end_lap - start_lap + 1, tyre_age_at_start });
+routes.set("/v1/f1/races/2026/13/stints", withMeta(envelope({
+  availability: "complete",
+  reason: null,
+  race_laps: 57,
+  drivers: [
+    { ...fixtureIdentity(4), stints: [stint(1, "MEDIUM", 1, 22, 0), stint(2, "HARD", 23, 57, 0)] },
+    { ...fixtureIdentity(81), stints: [stint(1, "MEDIUM", 1, 21, 0), stint(2, "HARD", 22, 57, 0)] },
+    { ...fixtureIdentity(1), stints: [stint(1, "MEDIUM", 1, 24, 0), stint(2, "HARD", 25, 57, 2)] },
+    { ...fixtureIdentity(63), stints: [stint(1, "SOFT", 1, 18, 0), stint(2, "MEDIUM", 19, 40, 3), stint(3, "SOFT", 41, 57, 4)] },
+    { ...fixtureIdentity(44), stints: [stint(1, "HARD", 1, 30, 0), stint(2, "MEDIUM", 31, 57, 0)] },
+  ],
+}), openf1Meta));
+// Running order by phase (laps inclusive). Positions 3, 6, 7… on the grid
+// belong to drivers outside the fixture. Verstappen has no position on lap
+// 30: the gap must stay a gap.
+const positionPhases = [
+  [0, 0, { 81: 1, 4: 2, 1: 4, 63: 5, 44: 7 }],
+  [1, 2, { 4: 1, 81: 2, 1: 3, 63: 5, 44: 8 }],
+  [3, 8, { 4: 1, 81: 2, 1: 3, 63: 4, 44: 9 }],
+  [9, 17, { 4: 1, 81: 2, 1: 3, 63: 4, 44: 7 }],
+  [18, 21, { 4: 1, 81: 2, 1: 3, 44: 5, 63: 6 }],
+  [22, 23, { 81: 1, 4: 2, 1: 3, 44: 4, 63: 6 }],
+  [24, 39, { 4: 1, 81: 2, 1: 3, 63: 4, 44: 6 }],
+  [40, 44, { 4: 1, 81: 2, 1: 3, 44: 5, 63: 6 }],
+  [45, 57, { 4: 1, 81: 2, 1: 3, 63: 4, 44: 5 }],
+];
+const raceResults = routes.get("/v1/f1/races/2026/13/results").data;
+routes.set("/v1/f1/races/2026/13/positions", withMeta(envelope({
+  availability: "complete",
+  reason: null,
+  method: "Running order at the end of each lap from OpenF1 /position; lap 0 is the starting grid.",
+  race_laps: 57,
+  drivers: drivers.map(([driverId]) => {
+    const result = raceResults.find((row) => row.driver_id === driverId);
+    const positions = positionPhases.flatMap(([from, to, order]) => Array.from({ length: to - from + 1 }, (_, index) => ({ lap: from + index, position: order[driverId] })))
+      .filter((point) => !(driverId === 1 && point.lap === 30));
+    return { ...fixtureIdentity(driverId), grid: result.grid, finish: result.position, positions };
+  }),
+}), openf1Meta));
+// Self-check: one driver per position on every lap, grid and finish match.
+for (const [from, to, order] of positionPhases) {
+  if (new Set(Object.values(order)).size !== Object.keys(order).length) throw new Error(`fixture positions collide on laps ${from}–${to}`);
+}
+for (const row of routes.get("/v1/f1/races/2026/13/positions").data.drivers) {
+  if (row.positions[0].position !== row.grid || row.positions.at(-1).lap !== 57 || row.positions.at(-1).position !== row.finish) {
+    throw new Error(`fixture positions of ${row.driver_code} disagree with the classification`);
+  }
+}
+// Partial lot H data as the engine (lot H1) can publish it, on the 2024
+// fixture race (same classification and pit stops as 2026/13):
+// - /stints omits Piastri (P2): the top-10 card keeps P2 and says so;
+// - Verstappen's stints overlap (laps 23–24 in both), as merged sources can;
+// - Russell has a fourth stint after lap 50 with no stop in the official
+//   summary, next to his two official stops;
+// - /positions misses Verstappen's laps 1–3 (no running order at the start).
+routes.set("/v1/f1/races/2024/13/stints", withMeta(envelope({
+  availability: "partial",
+  reason: "Stints are missing for one driver.",
+  race_laps: 57,
+  drivers: [
+    { ...fixtureIdentity(4), stints: [stint(1, "MEDIUM", 1, 22, 0), stint(2, "HARD", 23, 57, 0)] },
+    { ...fixtureIdentity(1), stints: [stint(1, "MEDIUM", 1, 24, 0), stint(2, "HARD", 23, 57, 2)] },
+    { ...fixtureIdentity(63), stints: [stint(1, "SOFT", 1, 18, 0), stint(2, "MEDIUM", 19, 40, 3), stint(3, "SOFT", 41, 50, 4), stint(4, "SOFT", 51, 57, 9)] },
+    { ...fixtureIdentity(44), stints: [stint(1, "HARD", 1, 30, 0), stint(2, "MEDIUM", 31, 57, 0)] },
+  ],
+}), openf1Meta));
+routes.set("/v1/f1/races/2024/13/positions", withMeta(envelope({
+  ...routes.get("/v1/f1/races/2026/13/positions").data,
+  availability: "partial",
+  reason: "No running order on laps 1–3 for one driver.",
+  drivers: routes.get("/v1/f1/races/2026/13/positions").data.drivers.map((row) => (row.driver_id === 1
+    ? { ...row, positions: row.positions.filter((point) => point.lap === 0 || point.lap > 3) }
+    : row)),
+}), openf1Meta));
+routes.set("/v1/f1/races/2024/13/pitstops", routes.get("/v1/f1/races/2026/13/pitstops"));
 routes.set("/v1/f1/races/2026/13/fastest-laps", envelope({
   year: 2026,
   round: 13,
@@ -253,6 +338,9 @@ routes.set("/v1/f1/races/2026/13/telemetry/4", withMeta(envelope({
     throttle_pct: 100, brake_pct: 0, n_gear: 7, rpm: 11_000, drs: 0,
   })),
 }), { ...openf1Meta, total: 31_874, page: 1, per_page: 2_000 }));
+// The next race: the API answers, but OpenF1 has not published the session.
+routes.set("/v1/f1/races/2026/14/stints", withMeta(unavailable("OpenF1 has not published tyre stints for this session yet."), openf1Meta));
+routes.set("/v1/f1/races/2026/14/positions", withMeta(unavailable("OpenF1 has not published lap positions for this session yet."), openf1Meta));
 routes.set("/v1/f1/races/2026/14/telemetry/4", unavailable("Complete, source-verified race telemetry is not available for this race."));
 routes.set("/v1/f1/drivers/4/head-to-head/81", envelope({
   driver1: { id: 4, code: "NOR", first_name: "Lando", last_name: "Norris" },
@@ -293,6 +381,8 @@ const errorRoutes = new Map([
   ["/v1/f1/standings/drivers/2098", 503],
   ["/v1/f1/races/2026/13/practice/FP3/best", 503],
   ["/v1/f1/races/2025/13/safety-cars", 503],
+  // 2025/13/stints is not routed at all (404, endpoint not deployed yet).
+  ["/v1/f1/races/2025/13/positions", 503],
 ]);
 
 const requestCounts = new Map();

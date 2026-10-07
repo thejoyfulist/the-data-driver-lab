@@ -32,7 +32,9 @@ export interface F1ToolDefinition {
   inputSchema: z.ZodObject<z.ZodRawShape>;
   kind: F1SourceKind;
   path: (input: Record<string, unknown>) => string;
-  shape: (data: unknown, input: Record<string, unknown>) => Record<string, unknown>;
+  /** Companion GET paths read alongside `path`, passed to `shape` by key. */
+  related?: (input: Record<string, unknown>) => Record<string, string>;
+  shape: (data: unknown, input: Record<string, unknown>, related?: Record<string, { ok: boolean; status: number; data: unknown }>) => Record<string, unknown>;
 }
 
 export type F1Fetcher = (path: string) => Promise<{ status: number; body: unknown }>;

@@ -8,6 +8,7 @@ import type { CommandItem } from "@/components/lab/CommandPalette";
 import {
   FastestLapsView,
   PaceView,
+  PositionsView,
   RaceTimelineView,
   StrategyView,
   type LabViewContext,
@@ -1634,6 +1635,8 @@ export default function LabPageClient({
         return <FastestLapsView context={viewContext} />;
       case "strategy":
         return <StrategyView context={viewContext} />;
+      case "positions":
+        return <PositionsView context={viewContext} />;
       case "timeline":
         return <RaceTimelineView context={viewContext} />;
       case "field":

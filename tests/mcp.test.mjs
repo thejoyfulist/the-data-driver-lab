@@ -7,7 +7,14 @@ import { allowMcpRequest, createMcpFetcher, handleMcpRequest } from '../src/lib/
 
 const calendar = [{ round: 1, official_round: 1, name: 'Australian Grand Prix', date: '2026-03-08', status: 'completed', circuit: { name: 'Albert Park', city: 'Melbourne', country: 'Australia' } }];
 const standings = [{ driver_id: 1, driver_code: 'NOR', first_name: 'Lando', last_name: 'Norris', team_name: 'McLaren', position: 1, points: 100 }];
-const fixtures = { '/v1/f1/calendar/2026': calendar, '/v1/f1/calendar/next': calendar[0], '/v1/f1/standings/drivers/2026': standings, '/v1/f1/races/2026/1/results': [{ driver_id: 1, driver_code: 'NOR', first_name: 'Lando', last_name: 'Norris', position: 1, points: 25 }] };
+const stints = { availability: 'complete', reason: null, race_laps: 58, drivers: [{ driver_id: 1, driver_code: 'NOR', first_name: 'Lando', last_name: 'Norris', team_name: 'McLaren', stints: [
+  { stint_number: 1, compound: 'MEDIUM', start_lap: 1, end_lap: 20, laps: 20, tyre_age_at_start: 0 },
+  { stint_number: 2, compound: 'HARD', start_lap: 21, end_lap: 40, laps: 20, tyre_age_at_start: 0 },
+  { stint_number: 3, compound: 'HARD', start_lap: 41, end_lap: 58, laps: 18, tyre_age_at_start: 0 },
+] }] };
+// One official stop for three stints (e.g. a tyre change under a red flag).
+const pitstops = [{ stop: 1, lap: 20, duration_ms: 22_400, driver_code: 'NOR', first_name: 'Lando', last_name: 'Norris' }];
+const fixtures = { '/v1/f1/races/2026/1/stints': stints, '/v1/f1/races/2026/1/pitstops': pitstops, '/v1/f1/calendar/2026': calendar, '/v1/f1/calendar/next': calendar[0], '/v1/f1/standings/drivers/2026': standings, '/v1/f1/races/2026/1/results': [{ driver_id: 1, driver_code: 'NOR', first_name: 'Lando', last_name: 'Norris', position: 1, points: 25 }] };
 const fetchJson = async (path) => path in fixtures ? { status: 200, body: { status: 'ok', data: fixtures[path], meta: { source: 'formula1.com' } } } : { status: 503, body: { status: 'error', error: { message: 'Unavailable' } } };
 
 async function connectedClient() {
@@ -17,11 +24,12 @@ async function connectedClient() {
   return client;
 }
 
-test('official SDK initializes and lists 19 read-only tools plus search/fetch', async () => {
+test('official SDK initializes and lists 21 read-only tools plus search/fetch', async () => {
   const client = await connectedClient();
   try {
     const tools = (await client.listTools()).tools;
-    assert.equal(tools.length, 21);
+    assert.equal(tools.length, F1_TOOLS.length + 2);
+    assert.equal(F1_TOOLS.length, 21);
     assert.deepEqual(tools.filter((tool) => tool.name.startsWith('f1_')).map((tool) => tool.name), F1_TOOLS.map((tool) => tool.name));
     for (const tool of tools) assert.equal(tool.annotations?.readOnlyHint, true);
     assert.equal(tools.find((tool) => tool.name === 'f1_race_results').inputSchema.type, 'object');
@@ -44,6 +52,24 @@ test('official SDK calls three F1 tools and ChatGPT search/fetch', async () => {
     assert.equal(fetched.structuredContent.id, 'race:2026:1');
     assert.equal(JSON.parse(fetched.content[0].text).id, 'race:2026:1');
     assert.ok(fetched.structuredContent.url);
+  } finally { await client.close(); }
+});
+
+test('f1_stints over MCP separates stint changes from official pit stops', async () => {
+  const client = await connectedClient();
+  try {
+    const listed = (await client.listTools()).tools.find((tool) => tool.name === 'f1_stints');
+    assert.match(listed.description, /stint_changes/);
+    assert.match(listed.description, /pit_stops/);
+    assert.doesNotMatch(listed.description, /stop count/);
+    const value = await client.callTool({ name: 'f1_stints', arguments: { season: 2026, api_round: 1 } });
+    assert.notEqual(value.isError, true);
+    const [driver] = value.structuredContent.data.drivers;
+    assert.equal(driver.stint_changes, 2);
+    assert.equal(driver.pit_stops, 1);
+    assert.equal(driver.stops, undefined);
+    assert.equal(value.structuredContent.data.pit_stops_source, 'formula1.com pit-stop summary (/pitstops)');
+    assert.equal(value.structuredContent.source.licence, 'CC BY-NC-SA 4.0');
   } finally { await client.close(); }
 });
 

@@ -6,6 +6,7 @@ export type LabViewId =
   | "pace"
   | "fastest"
   | "strategy"
+  | "positions"
   | "timeline"
   | "sessions"
   | "h2h"
