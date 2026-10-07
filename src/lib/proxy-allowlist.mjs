@@ -17,6 +17,7 @@ const GET_PATTERNS = [
   `v1/f1/circuits`,
   `v1/f1/standings/(drivers|constructors)/${SEASON}`,
   `v1/f1/races/${SEASON}/${ROUND}/(results|qualifying|fastest-laps|pitstops|safety-cars|incidents|weather|ingestion-readiness)`,
+  `v1/f1/races/${SEASON}/${ROUND}/(stints|positions)`,
   `v1/f1/races/${SEASON}/${ROUND}/(laps|telemetry)/${ID}`,
   `v1/f1/races/${SEASON}/${ROUND}/practice/${SESSION}/best`,
   `v1/f1/predictions/(race|qualifying)/${SEASON}/${ROUND}`,
