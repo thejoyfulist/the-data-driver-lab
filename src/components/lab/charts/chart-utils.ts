@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 /**
  * Track an element's width. The initial value is used for the server render
@@ -43,18 +43,38 @@ export function linearScale(domain: [number, number], range: [number, number]) {
   return (value: number) => r0 + ((value - d0) / span) * (r1 - r0);
 }
 
-/** Spread end-of-line labels so they never overlap (minimum gap in px). */
-export function spreadLabels<T extends { y: number }>(labels: T[], gap: number, min: number, max: number): T[] {
-  const sorted = [...labels].sort((a, b) => a.y - b.y);
-  for (let i = 1; i < sorted.length; i += 1) {
-    if (sorted[i].y - sorted[i - 1].y < gap) sorted[i] = { ...sorted[i], y: sorted[i - 1].y + gap };
-  }
-  const overflow = (sorted.at(-1)?.y ?? 0) - max;
-  if (overflow > 0) {
-    for (let i = sorted.length - 1; i >= 0; i -= 1) {
-      const limit = i === sorted.length - 1 ? max : sorted[i + 1].y - gap;
-      sorted[i] = { ...sorted[i], y: Math.max(min, Math.min(sorted[i].y, limit)) };
-    }
-  }
-  return sorted;
+export { spreadLabels } from "./label-layout.mjs";
+
+// ── Synchronised cursor ─────────────────────────────────────────────────
+
+interface CursorStore {
+  values: Record<string, number | null>;
+  set: (group: string, x: number | null) => void;
+}
+
+const ChartCursorContext = createContext<CursorStore | null>(null);
+
+/**
+ * Charts that share an axis (lap, round) inside this provider share one
+ * cursor: hovering or arrow-keying one chart moves the cursor in the others.
+ */
+export function ChartCursorProvider({ children }: { children: ReactNode }) {
+  const [values, setValues] = useState<Record<string, number | null>>({});
+  const set = useCallback((group: string, x: number | null) => {
+    setValues((current) => (current[group] === x ? current : { ...current, [group]: x }));
+  }, []);
+  const store = useMemo(() => ({ values, set }), [values, set]);
+  return createElement(ChartCursorContext.Provider, { value: store }, children);
+}
+
+/** Cursor position for `group`; a chart outside a provider (or without a group) keeps its own. */
+export function useChartCursor(group?: string): [number | null, (x: number | null) => void] {
+  const store = useContext(ChartCursorContext);
+  const [local, setLocal] = useState<number | null>(null);
+  const setShared = useCallback((x: number | null) => {
+    if (store && group) store.set(group, x);
+    else setLocal(x);
+  }, [group, store]);
+  if (store && group) return [store.values[group] ?? null, setShared];
+  return [local, setShared];
 }

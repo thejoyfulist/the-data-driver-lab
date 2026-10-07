@@ -24,13 +24,15 @@ interface TeamBarsProps {
   lowerIsBetter?: boolean;
   onToggle?: (id: TeamBarRow["id"]) => void;
   toggleLabel?: (row: TeamBarRow) => string;
+  /** Narrower label and note columns (race report cards). */
+  compact?: boolean;
 }
 
 /**
  * Horizontal bars in team colours. Labels sit outside the bar so text never
  * depends on the fill colour for contrast.
  */
-export function TeamBars({ rows, lowerIsBetter = false, onToggle, toggleLabel }: TeamBarsProps) {
+export function TeamBars({ rows, lowerIsBetter = false, onToggle, toggleLabel, compact = false }: TeamBarsProps) {
   const reducedMotion = useReducedMotion();
   const values = rows.map((row) => row.value);
   const max = Math.max(...values, lowerIsBetter ? 1 : 0);
@@ -43,15 +45,15 @@ export function TeamBars({ rows, lowerIsBetter = false, onToggle, toggleLabel }:
         const width = Math.max(ratio * 100, 1.5);
         const content = (
           <>
-            <span className="w-6 shrink-0 text-right font-mono text-[11px] tabular-nums text-white/[0.62]">
+            <span className="w-6 shrink-0 text-right font-mono text-[12px] tabular-nums text-white/[0.62]">
               {String(row.rank ?? index + 1).padStart(2, "0")}
             </span>
-            <span className="w-[7.5rem] shrink-0 sm:w-40">
-              <span className={`block truncate font-mono text-[12px] uppercase tracking-[0.04em] ${row.selected ? "text-light" : "text-white/[0.84]"}`}>
+            <span className={`shrink-0 ${compact ? "w-24" : "w-[7.5rem] sm:w-40"}`}>
+              <span className={`block truncate text-[14px] leading-5 ${row.selected ? "text-light" : "text-white/[0.84]"}`}>
                 {row.label}
               </span>
               {row.sub && (
-                <span className="flex items-center gap-1.5 truncate text-[11px] leading-4 text-white/[0.66]">
+                <span className="flex items-center gap-1.5 truncate text-[12px] leading-4 text-white/[0.66]">
                   <span aria-hidden="true" className="inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: row.color }} />
                   <span className="truncate">{row.sub}</span>
                 </span>
@@ -66,9 +68,9 @@ export function TeamBars({ rows, lowerIsBetter = false, onToggle, toggleLabel }:
                 style={{ backgroundColor: row.color, opacity: row.selected === false ? 0.55 : 0.9 }}
               />
             </span>
-            <span className="w-16 shrink-0 text-right font-mono text-[12px] tabular-nums text-light">{row.display}</span>
+            <span className={`${compact ? "w-[4.5rem]" : "w-20"} shrink-0 text-right font-mono text-[13px] tabular-nums text-light`}>{row.display}</span>
             {row.note !== undefined && (
-              <span className="hidden w-20 shrink-0 text-right font-mono text-[11px] tabular-nums text-white/[0.66] sm:inline">{row.note ?? ""}</span>
+              <span className={`hidden shrink-0 text-right font-mono text-[12px] tabular-nums text-white/[0.66] sm:inline ${compact ? "w-16" : "w-24"}`}>{row.note ?? ""}</span>
             )}
           </>
         );

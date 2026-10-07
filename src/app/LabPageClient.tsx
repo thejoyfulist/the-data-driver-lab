@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MotionRail } from "@/components/ui/MotionRail";
 import type { CommandItem } from "@/components/lab/CommandPalette";
 import {
   FastestLapsView,
@@ -13,12 +12,18 @@ import {
   StrategyView,
   type LabViewContext,
 } from "@/components/lab/LabViews";
-import { LazyView, ViewPlaceholder } from "@/components/lab/LazyView";
+import { LabInspector, type InspectorShortcut } from "@/components/lab/LabInspector";
+import { barButton, DriverChips, MobileActionBar, RacePicker, ViewNav } from "@/components/lab/LabWorkspace";
+import { ViewPlaceholder } from "@/components/lab/LazyView";
+import { RaceReportView } from "@/components/lab/RaceReportView";
+import { ChartCursorProvider } from "@/components/lab/charts/chart-utils";
 import { TeamBars } from "@/components/lab/charts/TeamBars";
 import { LabResourceProvider, type LabSeed } from "@/components/lab/useLabResource";
-import { NotPublished, ViewActions, ViewCard, ViewSkeleton } from "@/components/lab/ViewCard";
+import { ApiPanelContext, NotPublished, ViewCard, ViewSkeleton } from "@/components/lab/ViewCard";
+import { tableCell, tableHead } from "@/components/lab/view-shared";
 import { buildPracticeBest, type PracticeBestSummary } from "@/lib/lab-analytics";
 import {
+  copyText,
   exportBasename,
   fetchLab,
   formatLapMs,
@@ -30,8 +35,19 @@ import {
 import { readableTeamColor, teamColor } from "@/lib/team-colors";
 import { getCanonicalDriverCode } from "@/lib/driver-codes";
 import { isRaceWeekend, nextLiveInterval, raceWeekendWindow, relativeUpdate } from "@/lib/lab-live-policy";
+import {
+  defaultLabView,
+  formatCountdown,
+  formatRaceDay,
+  isLabViewId,
+  LAB_VIEWS,
+  labViewDef,
+  nextRaceAfter,
+  raceStartMs,
+  type LabViewId,
+} from "@/lib/lab-workspace.mjs";
 import { LIVE_SEASON, SITE_URL, LAB_PATH, REPO_URL } from "@/lib/site";
-import type { APICalendarRace, APIPrediction, APIRacePredictions } from "@/lib/api-types";
+import type { APICalendarRace, APIRacePredictions } from "@/lib/api-types";
 import { officialRoundLabel, sortRacesChronologically } from "@/lib/site-display.mjs";
 import {
   apiSourceHref,
@@ -45,18 +61,19 @@ import {
 
 // Season-wide views, the telemetry tab and the command palette load in the
 // browser on demand: their code and their requests stay out of the server
-// render and of the first JavaScript payload.
+// render and of the first JavaScript payload. The race report (the default
+// view) is server-rendered.
 const ChampionshipView = dynamic(() => import("@/components/lab/SeasonViews").then((module) => module.ChampionshipView), {
   ssr: false,
-  loading: () => <ViewPlaceholder id="lab-championship" index="02 / Championship" title="Championship progression" />,
+  loading: () => <ViewPlaceholder id="lab-championship" title="Championship progression" />,
 });
 const ConstructorsView = dynamic(() => import("@/components/lab/SeasonViews").then((module) => module.ConstructorsView), {
   ssr: false,
-  loading: () => <ViewPlaceholder id="lab-constructors" index="07 / Constructors" title="Constructors' championship" />,
+  loading: () => <ViewPlaceholder id="lab-constructors" title="Constructors' championship" />,
 });
 const HeadToHeadRecord = dynamic(() => import("@/components/lab/SeasonViews").then((module) => module.HeadToHeadRecord), {
   ssr: false,
-  loading: () => <div className="border-t border-white/[0.06] px-4 py-5 md:px-6"><ViewSkeleton label="Loading head-to-head record" rows={3} /></div>,
+  loading: () => <div className="mt-5"><ViewSkeleton label="Loading head-to-head record" rows={3} /></div>,
 });
 const TelemetryPanel = dynamic(() => import("@/components/lab/SeasonViews").then((module) => module.TelemetryPanel), {
   ssr: false,
@@ -204,7 +221,7 @@ interface IngestionReadiness {
 
 function SourceCitation({ source }: { source: LabAnswer["sources"][number] }) {
   const href = apiSourceHref(source.href, SITE_URL, LAB_PATH);
-  const className = "rounded-full border border-white/[0.10] px-3 py-1.5 font-mono text-[10px] text-white/[0.60]";
+  const className = "rounded-full border border-white/[0.10] px-3 py-1.5 text-[12px] text-white/[0.70]";
   return href ? (
     <a href={href} className={`${className} hover:border-teal/30 hover:text-teal`}>
       {source.title}
@@ -214,11 +231,11 @@ function SourceCitation({ source }: { source: LabAnswer["sources"][number] }) {
   );
 }
 const metricDefinitions: { key: Metric; label: string; short: string; hint: string }[] = [
-  { key: "seasonPoints", label: "Season points", short: "PTS", hint: "Championship points" },
-  { key: "raceFinish", label: "Race finish", short: "FINISH", hint: "Lower is better" },
-  { key: "grid", label: "Grid start", short: "GRID", hint: "Starting position" },
-  { key: "laps", label: "Laps completed", short: "LAPS", hint: "Race distance" },
-  { key: "winProbability", label: "Win probability", short: "WIN %", hint: "Only where forecast exists" },
+  { key: "seasonPoints", label: "Season points", short: "Points", hint: "Championship points" },
+  { key: "raceFinish", label: "Race finish", short: "Finish", hint: "Lower is better" },
+  { key: "grid", label: "Grid start", short: "Grid", hint: "Starting position" },
+  { key: "laps", label: "Laps completed", short: "Laps", hint: "Race distance" },
+  { key: "winProbability", label: "Win probability", short: "Win %", hint: "Only where forecast exists" },
 ];
 
 const starterQuestions = Object.values(STARTER_QUESTIONS);
@@ -402,7 +419,6 @@ export default function LabPageClient({
   const [calendar, setCalendar] = useState(initialCalendar);
   const [calendarSeason, setCalendarSeason] = useState<number | null>(initialSeasonError ? null : initialSeason);
   const [round, setRound] = useState<number | null>(defaultRound);
-  const [circuitId, setCircuitId] = useState("all");
   const [standings, setStandings] = useState(initialStandings);
   const [results, setResults] = useState(initialResults);
   const [predictions, setPredictions] = useState(initialPredictions);
@@ -447,7 +463,15 @@ export default function LabPageClient({
   const [isLoadingSeason, setIsLoadingSeason] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [view, setView] = useState<LabViewId>(() => defaultLabView(defaultRound != null));
+  const [apiOpen, setApiOpen] = useState(false);
+  const [fieldMode, setFieldMode] = useState<"chart" | "table">("chart");
+  const [shareState, setShareState] = useState<"idle" | "copied" | "failed">("idle");
+  // A view, race or season chosen by the visitor adds a browser history
+  // entry (Back returns to it); filters and restored state replace it.
+  const historyModeRef = useRef<"push" | "replace">("replace");
+  const focusViewRef = useRef(false);
+  const workspaceRef = useRef<HTMLDivElement>(null);
   const [liveNow, setLiveNow] = useState<number | null>(null);
   const [livePaused, setLivePaused] = useState(false);
   const [liveOnline, setLiveOnline] = useState(true);
@@ -518,7 +542,6 @@ export default function LabPageClient({
     setQualifyingPrediction(null);
     setSessionTimestamp(null);
     setSessionSourceMeta(null);
-    setCircuitId("all");
     raceSelectionChangedRef.current = true;
     roundRef.current = null;
     setRound(null);
@@ -578,6 +601,14 @@ export default function LabPageClient({
       window.removeEventListener("offline", sync);
     };
   }, []);
+
+  // Outside a live weekend the "Next" countdown refreshes once a minute.
+  // (During a live weekend the polling cycle owns the clock.)
+  useEffect(() => {
+    if (liveActive) return;
+    const timer = window.setInterval(() => setLiveNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, [liveActive]);
 
   const refreshLive = useCallback(async () => {
     if (liveInFlight.current || round == null) return;
@@ -721,27 +752,13 @@ export default function LabPageClient({
     }
     return map;
   }, [calendar, circuitByName]);
-  const seasonCircuits = useMemo(() => {
-    const seen = new Set<number>();
-    return calendar.flatMap((race) => {
-      const name = race.circuit?.name == null ? undefined : normalizeCircuitName(race.circuit.name);
-      const id = name == null ? undefined : circuitByName.get(name);
-      const circuit = id == null ? undefined : circuits.find((candidate) => candidate.id === id);
-      if (circuit == null || seen.has(circuit.id)) return [];
-      seen.add(circuit.id);
-      return [circuit];
-    });
-  }, [calendar, circuitByName, circuits]);
-  const selectedCircuit = circuitId === "all"
-    ? null
-    : circuits.find((circuit) => String(circuit.id) === circuitId) ?? null;
   const teams = useMemo(
     () => Array.from(new Set(standings.map((driver) => driver.team_name))).sort(),
     [standings],
   );
   const rows = useMemo(
-    () => buildRows(circuitId === "all" ? standings : [], results, predictions),
-    [circuitId, standings, results, predictions],
+    () => buildRows(standings, results, predictions),
+    [standings, results, predictions],
   );
   const selectedStandingRows = useMemo(
     () => buildRows(standings, [], null).filter((row) => selectedDrivers.includes(row.id)),
@@ -791,19 +808,16 @@ export default function LabPageClient({
       setHasCustomDrivers(true);
       changeSelectedDrivers(urlDrivers);
     }
-    if (urlCircuit && seasonCircuits.some((circuit) => String(circuit.id) === urlCircuit)) {
-      setCircuitId(urlCircuit);
-      const circuitRace = raceForCircuit.get(Number(urlCircuit));
-      if (circuitRace) changeRound(circuitRace.round);
-      else {
-        changeRound(null);
-        setResults([]);
-        setPredictions(null);
-        setSourceTimestamp(null);
-      }
-    }
+    // Links shared before the workspace named a circuit, not a race.
+    const circuitRace = urlCircuit && /^\d+$/.test(urlCircuit) ? raceForCircuit.get(Number(urlCircuit)) : undefined;
+    if (circuitRace && !calendar.some((race) => race.round === urlRound)) changeRound(circuitRace.round);
+    const urlView = params.get("view");
+    const hashView = LAB_VIEWS.find((item) => `#${item.anchor}` === window.location.hash)?.id;
+    const hasRace = roundRef.current != null;
+    setView(isLabViewId(urlView) ? urlView : hashView ?? defaultLabView(hasRace));
+    historyModeRef.current = "replace";
     setUrlStateReady(true);
-  }, [calendar, calendarSeason, changeRound, changeSeason, changeSelectedDrivers, isLoadingSeason, raceForCircuit, seasonCircuits, teams, urlStateReady]);
+  }, [calendar, calendarSeason, changeRound, changeSeason, changeSelectedDrivers, isLoadingSeason, raceForCircuit, teams, urlStateReady]);
 
   useEffect(() => {
     const seasonTransition = transitionInitialSeasonRestore(
@@ -824,7 +838,6 @@ export default function LabPageClient({
       setSeasonStandings((current) => ({ ...current, [initialSeason]: initialStandings }));
       roundRef.current = defaultRound;
       setRound(roundRef.current);
-      setCircuitId("all");
       setTeamFilter("all");
       setIsLoadingRace(defaultRound != null);
       setIsLoadingSession(defaultRound != null);
@@ -859,7 +872,6 @@ export default function LabPageClient({
         } else {
           changeRound(nextRound);
         }
-        setCircuitId("all");
         setTeamFilter("all");
       })
       .catch(() => {
@@ -869,7 +881,6 @@ export default function LabPageClient({
           setCalendarSeason(null);
           setStandings([]);
           changeRound(null);
-          setCircuitId("all");
           setIsLoadingRace(false);
           setIsLoadingSession(false);
           setSeasonError("Season data is unavailable from the live API.");
@@ -1029,6 +1040,8 @@ export default function LabPageClient({
   }, [clearStarterAnswer, round, season]);
 
   useEffect(() => {
+    // Historical standings are read only for the "Across seasons" view.
+    if (view !== "seasons") return;
     const targetSeasons = [season, initialSeason, ...Array.from({ length: 6 }, (_, i) => LIVE_SEASON - i)].filter((y, i, a) => a.indexOf(y) === i);
     const missingSeasons = targetSeasons.filter((year) => seasonStandings[year] == null);
     if (missingSeasons.length === 0) return;
@@ -1071,40 +1084,44 @@ export default function LabPageClient({
     return () => {
       cancelled = true;
     };
-  }, [initialSeason, season, seasonStandings, seasonTimestamps]);
+  }, [initialSeason, season, seasonStandings, seasonTimestamps, view]);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !urlStateReady) return;
+  const labQuery = useCallback((nextView: LabViewId) => {
     const params = new URLSearchParams();
-    if (round != null) params.set("round", String(round));
+    params.set("view", nextView);
     params.set("season", String(season));
-    params.set("metric", metric);
-    if (sessionView !== "race") params.set("session", sessionView);
-    if (teamFilter !== "all") params.set("team", teamFilter);
-    if (query.trim()) params.set("q", query.trim());
+    if (round != null) params.set("round", String(round));
     // Keep default comparison state out of shared URLs. Persist it only when
     // it was explicitly shared or changed by the user.
     if (hasCustomDrivers) params.set("drivers", selectedDrivers.join(","));
-    if (circuitId !== "all") params.set("circuit", circuitId);
-    if (comparisonDriver) params.set("compareDriver", comparisonDriver);
-    window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
-  }, [circuitId, comparisonDriver, hasCustomDrivers, metric, query, round, season, selectedDrivers, sessionView, teamFilter, urlStateReady]);
+    if (metric !== "seasonPoints") params.set("metric", metric);
+    if (sessionView !== "race") params.set("session", sessionView);
+    if (teamFilter !== "all") params.set("team", teamFilter);
+    if (query.trim()) params.set("q", query.trim());
+    if (comparisonDriver && hasExplicitComparisonDriver) params.set("compareDriver", comparisonDriver);
+    return `?${params.toString()}`;
+  }, [comparisonDriver, hasCustomDrivers, hasExplicitComparisonDriver, metric, query, round, season, selectedDrivers, sessionView, teamFilter]);
 
-  function selectCircuit(nextCircuitId: string) {
-    setCircuitId(nextCircuitId);
-    const circuitRace = nextCircuitId === "all" ? null : raceForCircuit.get(Number(nextCircuitId));
-    if (circuitRace) {
-      changeRound(circuitRace.round);
-      return;
-    }
-    if (nextCircuitId !== "all") {
-      changeRound(null);
-      setResults([]);
-      setPredictions(null);
-      setSourceTimestamp(null);
-      setRaceError(null);
-    }
-  }
+  useEffect(() => {
+    if (typeof window === "undefined" || !urlStateReady) return;
+    const next = `${window.location.pathname}${labQuery(view)}`;
+    const mode = historyModeRef.current;
+    historyModeRef.current = "replace";
+    if (next === `${window.location.pathname}${window.location.search}`) return;
+    if (mode === "push") window.history.pushState(null, "", next);
+    else window.history.replaceState(null, "", next);
+  }, [labQuery, urlStateReady, view]);
+
+  // Back and Forward re-read the URL: view, season, race and drivers.
+  useEffect(() => {
+    const onPopState = () => {
+      historyModeRef.current = "replace";
+      focusViewRef.current = true;
+      setUrlStateReady(false);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   const filteredRows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -1135,13 +1152,13 @@ export default function LabPageClient({
   const predictionCount = predictions?.predictions?.length ?? 0;
   const metricAvailability = useMemo<Record<Metric, boolean>>(
     () => ({
-      seasonPoints: circuitId === "all" && standings.some((driver) => driver.points != null),
+      seasonPoints: standings.some((driver) => driver.points != null),
       raceFinish: results.some((result) => result.position != null),
       grid: results.some((result) => result.grid != null),
       laps: results.some((result) => result.laps != null),
       winProbability: predictionCount > 0,
     }),
-    [circuitId, predictionCount, results, standings],
+    [predictionCount, results, standings],
   );
   const practiceRows = practiceBest?.rows ?? [];
   const comparisonOptions = useMemo<ComparisonDriver[]>(() => {
@@ -1317,36 +1334,55 @@ export default function LabPageClient({
   };
 
   const selectRace = useCallback((nextRound: number) => {
-    const nextRace = calendar.find((race) => race.round === nextRound);
-    if (!nextRace) return;
-    const nextCircuitId = nextRace.circuit?.name
-      ? circuitByName.get(normalizeCircuitName(nextRace.circuit.name))
-      : undefined;
-    setCircuitId(nextCircuitId == null ? "all" : String(nextCircuitId));
+    if (!calendar.some((race) => race.round === nextRound) || roundRef.current === nextRound) return;
+    historyModeRef.current = "push";
     changeRound(nextRound);
-  }, [calendar, changeRound, circuitByName]);
+  }, [calendar, changeRound]);
 
-  const scrollToView = useCallback((id: string) => {
-    const target = document.getElementById(id);
-    if (!target) return;
-    target.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
-    // A view still loading in the browser hands focus over when it mounts.
-    if (target.hasAttribute("data-view-placeholder")) target.closest("[data-lazy-view]")?.setAttribute("data-focus-pending", "true");
-    const heading = target.querySelector<HTMLElement>("h2");
-    if (heading) {
-      heading.setAttribute("tabindex", "-1");
-      heading.focus({ preventScroll: true });
+  const selectSeason = useCallback((nextSeason: number) => {
+    historyModeRef.current = "push";
+    changeSeason(nextSeason);
+  }, [changeSeason]);
+
+  const selectView = useCallback((nextView: LabViewId) => {
+    focusViewRef.current = true;
+    if (nextView === view) {
+      document.getElementById(labViewDef(nextView).anchor)?.querySelector<HTMLElement>("h1")?.focus();
+      return;
     }
-  }, [reducedMotion]);
+    historyModeRef.current = "push";
+    setView(nextView);
+  }, [view]);
+
+  // After a view change: bring the workspace top into sight if the page was
+  // scrolled, then move focus to the new view's heading (a view still loading
+  // in the browser hands focus over when it mounts, see ViewCard).
+  useEffect(() => {
+    if (!focusViewRef.current) return;
+    focusViewRef.current = false;
+    const workspace = workspaceRef.current;
+    if (workspace && workspace.getBoundingClientRect().top < 0) {
+      workspace.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+    }
+    const target = document.getElementById(labViewDef(view).anchor);
+    if (!target) return;
+    if (target.hasAttribute("data-view-placeholder")) {
+      workspace?.setAttribute("data-focus-pending", "true");
+      return;
+    }
+    const heading = target.querySelector<HTMLElement>("h1");
+    heading?.setAttribute("tabindex", "-1");
+    heading?.focus({ preventScroll: true });
+  }, [reducedMotion, view]);
 
   const commands = useMemo<CommandItem[]>(() => [
-    ...LAB_VIEWS.map((view) => ({
-      id: `view-${view.id}`,
+    ...LAB_VIEWS.map((item) => ({
+      id: `view-${item.id}`,
       group: "Views",
-      label: view.label,
-      hint: view.hint,
-      keywords: view.keywords,
-      run: () => scrollToView(view.id),
+      label: item.label,
+      hint: item.group,
+      keywords: item.keywords,
+      run: () => selectView(item.id),
     })),
     ...metricDefinitions.filter((item) => metricAvailability[item.key]).map((item) => ({
       id: `metric-${item.key}`,
@@ -1355,7 +1391,7 @@ export default function LabPageClient({
       hint: item.short,
       run: () => {
         setMetric(item.key);
-        scrollToView("lab-field");
+        selectView("field");
       },
     })),
     ...calendar.map((race) => ({
@@ -1377,7 +1413,6 @@ export default function LabPageClient({
         if (!selectedDriversRef.current.includes(driver.driver_id)) {
           changeSelectedDrivers([...selectedDriversRef.current, driver.driver_id].slice(-4));
         }
-        scrollToView("lab-pace");
       },
     })),
     ...AVAILABLE_SEASONS.slice(0, 12).map((year) => ({
@@ -1385,9 +1420,9 @@ export default function LabPageClient({
       group: "Seasons",
       label: `${year} season`,
       hint: year === LIVE_SEASON ? "live" : "archive",
-      run: () => changeSeason(year),
+      run: () => selectSeason(year),
     })),
-  ], [calendar, changeSeason, changeSelectedDrivers, metricAvailability, scrollToView, season, selectRace, standings]);
+  ], [calendar, changeSelectedDrivers, metricAvailability, season, selectRace, selectSeason, selectView, standings]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -1403,8 +1438,11 @@ export default function LabPageClient({
       if (typing) return;
       if (event.key === "/") {
         event.preventDefault();
-        setFiltersOpen(true);
-        window.requestAnimationFrame(() => findInputRef.current?.focus());
+        if (view !== "field") {
+          historyModeRef.current = "push";
+          setView("field");
+        }
+        window.requestAnimationFrame(() => window.requestAnimationFrame(() => findInputRef.current?.focus()));
       } else if (event.key === "[" || event.key === "]") {
         const index = calendar.findIndex((race) => race.round === roundRef.current);
         const next = calendar[index + (event.key === "]" ? 1 : -1)];
@@ -1416,7 +1454,7 @@ export default function LabPageClient({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [calendar, paletteOpen, selectRace]);
+  }, [calendar, paletteOpen, selectRace, view]);
 
   const sessionEndpoints = round == null
     ? []
@@ -1455,462 +1493,449 @@ export default function LabPageClient({
     ...Object.fromEntries(Object.entries(driver.metrics).map(([key, value]) => [key, String(value)])),
   }));
 
-  return (
-    <LabResourceProvider seed={initialSeed} refreshVersion={liveResourceVersion} raceScope={liveActive && round != null ? `/v1/f1/races/${season}/${round}/` : null}>
-    <div className="min-h-[calc(100vh-3.5rem)] bg-dark" data-lab-hydrated={hydrated ? "true" : undefined}>
-      <div className="mx-auto max-w-[1480px] px-4 pb-20 pt-4 md:px-8 md:pt-10">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 md:mb-8">
-          {SITE_URL ? (
-            <a href={REPO_URL} className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/[0.66] hover:text-light">Open source · MIT</a>
-          ) : (
-            <Link href="/" className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/[0.66] hover:text-light">← Dashboard</Link>
-          )}
-          <div className="flex items-center gap-3">
-            <span className="hidden items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] sm:flex">
-              <span className="h-1.5 w-1.5 rounded-full bg-teal" />
-              <span className="text-teal/80">Live API</span>
-              <span className="text-white/[0.60]">/</span>
-              <span className="text-white/[0.66]">Data Lab</span>
-            </span>
-            {!SITE_URL && <a
-              href={REPO_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hidden min-h-9 items-center rounded-md border border-white/[0.12] px-3 font-mono text-[11px] uppercase tracking-[0.08em] text-white/[0.72] hover:border-white/[0.24] hover:text-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 sm:inline-flex"
-            >
-              Open source ↗
-            </a>}
-            <button
-              type="button"
-              onClick={() => setPaletteOpen(true)}
-              aria-haspopup="dialog"
-              aria-keyshortcuts="Control+K Meta+K"
-              className="inline-flex min-h-9 items-center gap-2 rounded-md border border-white/[0.12] px-3 font-mono text-[11px] uppercase tracking-[0.08em] text-white/[0.72] hover:border-white/[0.24] hover:text-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70"
-            >
-              Jump to
-              <kbd className="rounded border border-white/[0.14] px-1.5 py-0.5 font-mono text-[10px] text-white/[0.72]">⌘K</kbd>
-            </button>
-          </div>
+  // ── Workspace bar: session status ──────────────────────────────────
+  const upcomingRace = liveNow == null ? nextRace : nextRaceAfter(initialCalendar, liveNow);
+  const upcomingStart = raceStartMs(upcomingRace);
+  const countdown = liveNow != null && upcomingStart != null ? formatCountdown(upcomingStart - liveNow) : null;
+  const relativeFreshness = relativeUpdate(liveTimestamp, liveNow ?? 0);
+  const followWeekend = weekendRace != null && !liveActive && season === initialSeason ? weekendRace : null;
+  const statusTone = liveActive
+    ? liveStatus === "Live" ? "border-teal/30 text-light" : "border-amber-400/30 text-amber-400"
+    : "border-amber-400/30 text-amber-400";
+
+  const sessionStatus = (
+    <div
+      className={`flex min-h-6 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border-transparent py-0.5 text-[13px] transition-colors duration-200 lg:min-h-10 lg:border lg:px-3 lg:py-1.5 ${liveHighlight && !reducedMotion ? "bg-teal/[0.08]" : ""} ${statusTone}`}
+      data-testid="lab-live-status"
+      data-live-next-interval={liveActive ? nextLiveInterval([liveTtl], liveFailures) : undefined}
+    >
+      <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${liveActive && liveStatus === "Live" ? "bg-teal" : "bg-amber-400"}`} />
+      {liveActive ? (
+        <>
+          <span className="font-medium">{liveStatus}</span>
+          {relativeFreshness && <span className="text-white/[0.70]">{relativeFreshness}</span>}
+          <button type="button" onClick={() => setLivePaused((paused) => !paused)} className="min-h-11 rounded-md border border-white/[0.14] px-2 text-[13px] text-white/[0.84] hover:border-white/[0.3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 lg:min-h-8">{livePaused ? "Resume" : "Pause"}</button>
+          <button type="button" onClick={() => void refreshLive()} disabled={!liveOnline || liveInFlight.current} className="min-h-11 rounded-md border border-white/[0.14] px-2 text-[13px] text-white/[0.84] hover:border-white/[0.3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 disabled:opacity-50 lg:min-h-8">Refresh now</button>
+        </>
+      ) : followWeekend ? (
+        <>
+          <span>Race weekend · {raceLabel(followWeekend.name)}</span>
+          <button type="button" onClick={() => selectRace(followWeekend.round)} className="min-h-11 rounded-md border border-amber-400/35 px-2 text-[13px] lg:min-h-8 hover:bg-amber-400/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70">Follow live</button>
+        </>
+      ) : upcomingRace ? (
+        <span className="min-w-0 truncate">
+          Next: {raceLabel(upcomingRace.name)}
+          {formatRaceDay(upcomingRace) ? ` · ${formatRaceDay(upcomingRace)}` : ""}
+          {countdown ? ` · in ${countdown}` : ""}
+        </span>
+      ) : (
+        <span>No upcoming race in the calendar</span>
+      )}
+      <span className="sr-only" aria-live="polite" aria-atomic="true">{liveAnnouncement}</span>
+    </div>
+  );
+
+  async function shareView() {
+    const copied = await copyText(window.location.href);
+    setShareState(copied ? "copied" : "failed");
+    window.setTimeout(() => setShareState("idle"), 2_000);
+  }
+
+  // ── Race report data ───────────────────────────────────────────────
+  const lastCompleted = [...calendar].reverse().find((race) => race.status === "completed") ?? null;
+  const reportRace = selectedRace
+    ? {
+        round: selectedRace.round,
+        name: selectedRace.name,
+        date: selectedRace.date,
+        officialRound: selectedRoundLabel,
+        circuit: selectedRace.circuit,
+        completed: selectedRace.status === "completed",
+      }
+    : null;
+  const coverage = (
+    <dl className="mt-6 grid gap-x-6 gap-y-1.5 border-t border-white/[0.06] pt-4 text-[13px] sm:grid-cols-2" aria-label="Data coverage and provenance" data-provenance>
+      {([
+        ["Race payload", round == null ? "Unavailable" : `${season} / ${selectedRoundLabel ?? raceLabel(selectedRace?.name ?? "race")}`, round != null],
+        ["Race results", hasRaceData ? `${results.length} rows` : "Unavailable", hasRaceData],
+        ["Win forecast", predictionCount ? `${predictionCount} rows` : "No forecast", predictionCount > 0],
+        ["Source timestamp", formatSourceTimestamp(sourceTimestamp), sourceTimestamp != null],
+        ["Dataset coverage", datasetCoverageValue, datasetCoverageReady],
+        ["Projection freshness", formatSourceTimestamp(ingestionReadiness?.projection.projected_at ?? null), ingestionReadiness?.projection.projected_at != null],
+        ["Unavailable datasets", unavailableDatasetNames.length ? unavailableDatasetNames.join(", ") : "None", unavailableDatasetNames.length === 0 && requiredDatasets.length > 0],
+      ] as [string, string, boolean][]).map(([label, value, ready]) => (
+        <div key={label} className="flex items-baseline justify-between gap-3">
+          <dt className="text-white/[0.66]">{label}</dt>
+          <dd className={`text-right ${ready ? "text-white/[0.86]" : "text-amber-400"}`}>{value}</dd>
         </div>
+      ))}
+    </dl>
+  );
 
-        <header className="mb-2 max-w-4xl md:mb-8">
-          <p className="section-index mb-2 hidden text-teal md:block">RACE LAB</p>
-          <h1 className="font-serif text-[clamp(2rem,4.2vw,3.75rem)] leading-[0.95] tracking-[-0.04em] text-light">
-            Work with <span className="text-teal">the race data.</span>
-          </h1>
-          <p className="mt-3 hidden max-w-3xl text-body leading-relaxed text-white/[0.66] md:block">
-            Pick a race, change the lens, compare the field. Every view is built from the public F1 API, can be exported, and shows the request behind it. Unavailable data stays unavailable.
-          </p>
-          <div className={`mt-1 flex flex-wrap items-center gap-3 rounded-lg border px-2 py-0.5 font-mono text-[11px] transition-colors duration-200 md:mt-4 md:px-3 md:py-2 ${liveHighlight && !reducedMotion ? "border-teal/30 bg-teal/[0.06]" : "border-white/[0.10] bg-white/[0.02]"}`} data-testid="lab-live-status" data-live-next-interval={liveActive ? nextLiveInterval([liveTtl], liveFailures) : undefined}>
-            <span className={`h-1.5 w-1.5 rounded-full ${liveStatus === "Live" ? "bg-teal" : liveStatus === "Offline" ? "bg-amber-400" : "bg-white/40"}`} aria-hidden="true" />
-            <span className="text-light">{liveStatus}</span>
-            {relativeUpdate(liveTimestamp, liveNow ?? 0) && <span className="text-white/[0.62]">{relativeUpdate(liveTimestamp, liveNow ?? 0)}</span>}
-            {liveActive && <button type="button" onClick={() => setLivePaused((paused) => !paused)} className="rounded border border-white/[0.14] px-2 py-1 text-white/[0.80] hover:border-teal/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70">{livePaused ? "Resume" : "Pause"}</button>}
-            {liveActive && <button type="button" onClick={() => void refreshLive()} disabled={!liveOnline || liveInFlight.current} className="rounded border border-white/[0.14] px-2 py-1 text-white/[0.80] hover:border-teal/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 disabled:opacity-40">Refresh now</button>}
-            <span className="sr-only" aria-live="polite" aria-atomic="true">{liveAnnouncement}</span>
-          </div>
-        </header>
+  // ── Inspector shortcuts (ready-made analyses) ───────────────────────
+  const leaderTeam = [...standings].sort((a, b) => (a.position ?? 999) - (b.position ?? 999))[0]?.team_name;
+  const leaderTeammates = standings.filter((driver) => driver.team_name === leaderTeam).slice(0, 2);
+  const shortcuts: InspectorShortcut[] = [
+    ...(leaderTeammates.length === 2 ? [{
+      id: "teammates",
+      label: `Compare teammates: ${leaderTeammates.map((driver) => driver.driver_code ?? driver.last_name).join(" and ")}`,
+      run: () => {
+        setHasCustomDrivers(true);
+        changeSelectedDrivers(leaderTeammates.map((driver) => driver.driver_id));
+        selectView("h2h");
+      },
+    }] : []),
+    ...(lastCompleted ? [{
+      id: "last-pace",
+      label: "Race pace, last Grand Prix",
+      run: () => {
+        selectRace(lastCompleted.round);
+        selectView("pace");
+      },
+    }] : []),
+    ...(round != null ? [{ id: "timeline", label: "Safety cars and incidents, this race", run: () => selectView("timeline") }] : []),
+    {
+      id: "gain",
+      label: STARTER_QUESTIONS.POSITION_GAIN,
+      run: () => {
+        selectView("ask");
+        handleStarterQuestion(STARTER_QUESTIONS.POSITION_GAIN);
+      },
+    },
+  ];
 
-        {(seasonError || raceError || sessionError || historicalSeasonError) && (
-          <section
-            aria-label="System status"
-            role="status"
-            aria-live="polite"
-            className="mb-4 rounded-xl border border-amber-400/25 bg-amber-400/[0.06] px-4 py-4 md:px-5"
+  // ── Views ──────────────────────────────────────────────────────────
+  const metricButtons = (
+    <div className="flex flex-wrap gap-1 rounded-lg border border-white/[0.08] p-1" role="tablist" aria-label="Measure">
+      {metricDefinitions.map((item) => {
+        const available = metricAvailability[item.key];
+        return <button key={item.key} type="button" role="tab" aria-selected={metric === item.key} aria-disabled={!available} disabled={!available} title={available ? item.hint : `${item.label} unavailable from the live API for this race`} onClick={() => setMetric(item.key)} className={`min-h-11 rounded-md px-3 text-[13px] transition-colors lg:min-h-9 ${metric === item.key ? "bg-teal text-dark" : available ? "text-white/[0.78] hover:bg-white/[0.05] hover:text-light" : "cursor-not-allowed text-white/[0.62]"}`}>
+          {item.short}
+        </button>;
+      })}
+    </div>
+  );
+  const explorerTable = (
+    <div className="overflow-x-auto" tabIndex={0} aria-label="Data explorer table">
+      <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[13px] text-white/[0.70]">Sort {(["position", "name", "metric"] as SortMode[]).map((mode) => <button key={mode} type="button" aria-pressed={sortMode === mode} onClick={() => setSortMode(mode)} className={`min-h-11 rounded-md border px-3 text-[13px] capitalize lg:min-h-9 ${sortMode === mode ? "border-white/[0.24] text-light" : "border-white/[0.08] text-white/[0.72] hover:text-light"}`}>{mode === "metric" ? activeMetric.short : mode}</button>)}</div>
+      <table className="w-full min-w-[760px] border-collapse text-left">
+        <thead><tr className={tableHead}><th scope="col" className="px-3 py-2">Driver</th><th scope="col" className="px-3 py-2">Team</th><th scope="col" className="px-3 py-2">Season pos.</th><th scope="col" className="px-3 py-2">Points</th><th scope="col" className="px-3 py-2">Race finish</th><th scope="col" className="px-3 py-2">Grid</th><th scope="col" className="px-3 py-2">Win %</th><th scope="col" className="px-3 py-2 text-right">Status</th></tr></thead>
+        <tbody>{filteredRows.map((row) => { const isSelected = selectedDrivers.includes(row.id); return <tr key={row.id} className={`border-b border-white/[0.04] transition-colors hover:bg-white/[0.035] ${isSelected ? "bg-white/[0.04]" : ""}`}><td className="px-1 py-1"><button type="button" aria-label={`Select ${row.name} for comparison`} aria-pressed={isSelected} onClick={() => toggleDriver(row.id)} className={`min-h-11 rounded px-2 text-left text-[14px] hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 ${isSelected ? "text-light" : "text-white/[0.84]"}`}><span>{row.name}</span><span className="ml-2 font-mono text-[12px]" style={{ color: readableTeamColor(row.team) }}>{row.code}</span></button></td><td className="px-3 py-2 text-[13px] text-white/[0.72]"><span className="flex items-center gap-1.5"><span aria-hidden="true" className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: teamColor(row.team) }} />{row.team}</span></td><td className={tableCell}>{row.seasonPosition ?? "—"}</td><td className={tableCell}>{formatValue("seasonPoints", row.seasonPoints)}</td><td className={tableCell}>{formatValue("raceFinish", row.racePosition)}</td><td className={tableCell}>{formatValue("grid", row.grid)}</td><td className={tableCell}>{formatValue("winProbability", row.winProbability)}</td><td className="px-3 py-2 text-right text-[13px] text-white/[0.70]">{row.status ?? "season data"}</td></tr>; })}</tbody>
+      </table>
+      {filteredRows.length === 0 && <p className="px-3 py-4 text-[14px] text-white/[0.70]">No rows match this query.</p>}
+      <p className="mt-2 text-[12px] text-white/[0.62]">— means the API publishes no value for that cell (for example no race result for a driver who only appears in the standings).</p>
+    </div>
+  );
+
+  function renderView() {
+    switch (view) {
+      case "report":
+        return <RaceReportView context={viewContext} race={reportRace} isLatestCompleted={lastCompleted != null && lastCompleted.round === round} onSelectView={selectView} coverage={coverage} />;
+      case "championship":
+        return <ChampionshipView context={viewContext} />;
+      case "constructors":
+        return <ConstructorsView context={viewContext} />;
+      case "pace":
+        return <PaceView context={viewContext} />;
+      case "fastest":
+        return <FastestLapsView context={viewContext} />;
+      case "strategy":
+        return <StrategyView context={viewContext} />;
+      case "timeline":
+        return <RaceTimelineView context={viewContext} />;
+      case "field":
+        return (
+          <ViewCard
+            id="lab-field"
+            title={fieldTitle}
+            scope={fieldScope}
+            endpoints={fieldMode === "table" ? tableEndpoints : fieldEndpoints}
+            source={{ source: "tdd", timestamp: metric === "seasonPoints" ? seasonTimestamps[season] ?? null : sourceTimestamp }}
+            exportRows={fieldExportRows}
+            exportName={exportBasename(`field-${metric}`, season, metric === "seasonPoints" ? null : roundSlug)}
+            footnote="Select a driver (bar or table row) to add or remove it from the comparison."
+            actions={
+              <div className="flex rounded-md border border-white/[0.10] p-0.5" role="group" aria-label="Display">
+                {(["chart", "table"] as const).map((value) => (
+                  <button key={value} type="button" aria-pressed={fieldMode === value} onClick={() => setFieldMode(value)} className={`min-h-10 rounded px-3 text-[13px] capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 lg:min-h-8 ${fieldMode === value ? "bg-teal text-dark" : "text-white/[0.72] hover:text-light"}`}>{value}</button>
+                ))}
+              </div>
+            }
           >
-            <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-amber-200">Live data status</p>
-            <ul className="mt-2 space-y-1 text-body-sm text-white/[0.72]">
-              {[...new Set([seasonError, raceError, sessionError, historicalSeasonError].filter((message): message is string => Boolean(message)))].map((message) => (
-                <li key={message}>{message}</li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        <div className="mb-4 hidden border-y border-white/[0.04] py-3 md:block">
-          <MotionRail label="Query telemetry" detail={`${season} · ${chartRows.length} of ${rows.length} drivers · grounded API`} />
-        </div>
-
-        <section aria-label="Lab query controls" className="rounded-xl border border-white/[0.10] bg-white/[0.025] p-3 md:p-5">
-          <div className="flex items-center justify-between gap-3 md:hidden">
-            <p className="min-w-0 truncate font-mono text-[11px] uppercase tracking-[0.08em] text-white/[0.80]">
-              {season} · {raceScopeLabel ?? "No race"}{teamFilter !== "all" ? ` · ${teamFilter}` : ""}
-            </p>
-            <button
-              type="button"
-              aria-expanded={filtersOpen}
-              aria-controls="lab-filters"
-              onClick={() => setFiltersOpen((open) => !open)}
-              className="inline-flex min-h-10 shrink-0 items-center rounded-md border border-white/[0.14] px-3 font-mono text-[11px] uppercase tracking-[0.08em] text-light"
-            >
-              {filtersOpen ? "Close" : "Filters"}
-            </button>
-          </div>
-          <div className="mb-4 hidden flex-wrap items-center justify-between gap-3 md:flex">
-            <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-white/[0.66]">Query the dataset</p>
-              <p className="mt-1 text-body-sm text-white/[0.66]">Change one control and every view below follows. Press <kbd className="font-mono">/</kbd> to search, <kbd className="font-mono">[</kbd> <kbd className="font-mono">]</kbd> to step through races.</p>
-            </div>
-            <span className="rounded-full border border-teal/20 px-3 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-teal/80">
-              {isLoadingSeason ? "Loading season" : "Shareable view"}
-            </span>
-          </div>
-          <div id="lab-filters" className={`${filtersOpen ? "mt-3 grid" : "hidden"} gap-3 md:mt-0 md:grid md:grid-cols-2 xl:grid-cols-[150px_minmax(180px,1fr)_minmax(220px,1.2fr)_minmax(200px,1fr)_minmax(170px,.8fr)]`}>
-            <Control label="Season">
-              <select aria-label="Season" value={season} onChange={(event) => changeSeason(Number(event.target.value))} className="control-select">
-                {AVAILABLE_SEASONS.map((year) => <option key={year} value={year}>{year} / {year === LIVE_SEASON ? "live" : "archive"}</option>)}
-              </select>
-            </Control>
-            <Control label="Circuit">
-              <select aria-label="Circuit" value={circuitId} onChange={(event) => selectCircuit(event.target.value)} className="control-select">
-                <option value="all">All circuits · {seasonCircuits.length} this season</option>
-                {seasonCircuits.map((circuit) => <option key={circuit.id} value={circuit.id}>{circuit.name} · {circuit.country}</option>)}
-              </select>
-            </Control>
-            <Control label="Race">
-              <select aria-label="Race" value={round ?? ""} onChange={(event) => selectRace(Number(event.target.value))} className="control-select">
-                {calendar.map((race) => <option key={race.round} value={race.round}>{officialRoundLabel(race) ? `${officialRoundLabel(race)} · ` : ""}{raceLabel(race.name)}{race.status !== "completed" ? ` — ${race.status}` : ""}</option>)}
-              </select>
-            </Control>
-            <Control label="Find in field">
-              <input ref={findInputRef} aria-label="Find a driver or team" aria-keyshortcuts="/" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Driver, code or team" className="control-input" />
-            </Control>
-            <Control label="Team filter">
-              <select aria-label="Team filter" value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)} className="control-select">
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              {metricButtons}
+              <input ref={findInputRef} aria-label="Find a driver or team" aria-keyshortcuts="/" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a driver or team  /" className="control-input min-w-[200px] flex-1 sm:max-w-[260px]" />
+              <select aria-label="Team filter" value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)} className="control-select sm:max-w-[200px]">
                 <option value="all">All teams</option>
                 {teams.map((team) => <option key={team} value={team}>{team}</option>)}
               </select>
-            </Control>
-          </div>
-        </section>
-
-        <nav aria-label="Lab views" className="sticky top-14 z-20 -mx-4 mt-3 overflow-x-auto border-b border-white/[0.06] bg-dark/95 px-4 backdrop-blur md:static md:mx-0 md:mt-4 md:rounded-xl md:border md:px-2">
-          <ul className="flex min-w-max gap-1 py-1.5">
-            {LAB_VIEWS.map((view) => (
-              <li key={view.id}>
-                <a href={`#${view.id}`} className="inline-flex min-h-9 items-center rounded-md px-2.5 font-mono text-[11px] uppercase tracking-[0.08em] text-white/[0.72] hover:bg-white/[0.05] hover:text-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70">
-                  {view.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="min-w-0">
-            <ViewCard
-              id="lab-field"
-              index="01 / Field"
-              title={fieldTitle}
-              scope={fieldScope}
-              endpoints={fieldEndpoints}
-              source={{ source: "tdd", timestamp: metric === "seasonPoints" ? seasonTimestamps[season] ?? null : sourceTimestamp }}
-              exportRows={fieldExportRows}
-              exportName={exportBasename(`field-${metric}`, season, metric === "seasonPoints" ? null : roundSlug)}
-              footnote={selectedRace ? `${raceScopeLabel} · ${formatDate(selectedRace.date)} · ${selectedRace.status}. Click a bar to add or remove a driver from the comparison.` : "Click a bar to add or remove a driver from the comparison."}
-            >
-              <div className="mb-4 flex flex-wrap gap-1 rounded-lg border border-white/[0.08] p-1" role="tablist" aria-label="Metric">
-                {metricDefinitions.map((item) => {
-                  const available = metricAvailability[item.key];
-                  return <button key={item.key} type="button" role="tab" aria-selected={metric === item.key} aria-disabled={!available} disabled={!available} title={available ? item.hint : `${item.label} unavailable from the live API for this race`} onClick={() => setMetric(item.key)} className={`min-h-10 rounded-md px-3 py-2 font-mono text-[11px] uppercase tracking-[0.1em] transition-colors ${metric === item.key ? "bg-teal text-dark" : available ? "text-white/[0.72] hover:bg-white/[0.05] hover:text-light" : "cursor-not-allowed text-white/[0.45]"}`}>
-                    {item.short}
-                  </button>;
-                })}
-              </div>
-              {isLoadingRace && metric !== "seasonPoints" ? <ViewSkeleton label="Loading race data" rows={10} /> : raceError && metric !== "seasonPoints" ? <EmptyState title="Live data unavailable" detail={raceError} tone="amber" /> : selectedCircuit && !raceForCircuit.has(selectedCircuit.id) ? <EmptyState title={`No ${season} data for this circuit`} detail={`${selectedCircuit.name} is in the ${circuits.length}-circuit catalogue, but no ${season} race payload is linked to it yet.`} tone="amber" /> : chartRows.length === 0 ? <EmptyState title="No values for this lens" detail={`The API returned no ${activeMetric.label.toLowerCase()} for the current selection${filterParts.length ? ` and filter (${filterLabel})` : ""}.`} tone="amber" /> : (
-                <TeamBars
-                  rows={chartRows.map((row, index) => ({
-                    id: row.id,
-                    rank: metric === "seasonPoints" ? row.seasonPosition ?? index + 1 : index + 1,
-                    label: row.name.split(" ").at(-1) ?? row.name,
-                    sub: row.team,
-                    color: teamColor(row.team),
-                    textColor: readableTeamColor(row.team),
-                    value: getMetricValue(row, metric) as number,
-                    display: formatValue(metric, getMetricValue(row, metric)),
-                    selected: selectedDrivers.includes(row.id),
-                  }))}
-                  lowerIsBetter={metric === "raceFinish" || metric === "grid"}
-                  onToggle={(id) => toggleDriver(Number(id))}
-                  toggleLabel={(row) => `${row.selected ? "Remove" : "Add"} ${row.label} ${row.selected ? "from" : "to"} comparison`}
-                />
-              )}
-            </ViewCard>
-          </div>
-
-          <aside className="space-y-4">
-            {selectedCircuit && <section className="rounded-xl border border-white/[0.08] bg-white/[0.018] p-5">
-              <p className="section-index mb-4">CIRCUIT CONTEXT</p>
-              <h3 className="font-mono text-[14px] uppercase tracking-[0.05em] text-light">{selectedCircuit.name}</h3>
-              <p className="mt-2 text-body-sm text-white/[0.66]">{selectedCircuit.city} · {selectedCircuit.country}</p>
-              <div className="mt-5 grid grid-cols-2 gap-3 border-t border-white/[0.06] pt-4">
-                <Metric label={`${season} round`} value={officialRoundLabel(raceForCircuit.get(selectedCircuit.id)) ?? "Not published"} />
-                <Metric label="Track length" value={selectedCircuit.length_km == null ? "Not published" : `${selectedCircuit.length_km} km`} />
-                <Metric label="Turns" value={selectedCircuit.turns == null ? "Not published" : String(selectedCircuit.turns)} />
-                <Metric label="Data state" value={raceForCircuit.has(selectedCircuit.id) ? "linked" : "catalogue only"} />
-              </div>
-            </section>}
-            <section className="rounded-xl border border-white/[0.08] bg-white/[0.018] p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <p className="section-index">{selectedCircuit ? "COMPARE / CIRCUIT" : "COMPARE"}</p>
-                <span className="font-mono text-[11px] tabular-nums text-teal">{selectedDrivers.length} / 4</span>
-              </div>
-              <div className="space-y-2">
-                {selectedDrivers.length === 0 ? <p className="text-body-sm leading-relaxed text-white/[0.66]">Select rows in the chart or table to build a comparison.</p> : selectedDrivers.map((id) => {
-                  const row = selectedComparisonRows.find((item) => item.id === id);
-                  if (!row) return null;
-                  return <button key={id} type="button" onClick={() => toggleDriver(id)} aria-label={`Remove ${row.name} from comparison`} className="flex w-full items-center justify-between rounded-lg border border-white/[0.10] bg-white/[0.03] px-3 py-2.5 text-left hover:border-white/[0.2]" style={{ boxShadow: `inset 3px 0 0 ${teamColor(row.team)}` }}><span><span className="block font-mono text-[12px] uppercase tracking-[0.07em]" style={{ color: readableTeamColor(row.team) }}>{row.code}</span><span className="mt-0.5 block text-body-sm text-white/[0.78]">{row.name}</span><span className="block text-caption text-white/[0.62]">{row.team}</span></span><span aria-hidden="true" className="text-white/[0.66]">×</span></button>;
-                })}
-              </div>
-              <p className="mt-4 border-t border-white/[0.06] pt-3 font-mono text-[11px] uppercase tracking-[0.08em] text-white/[0.62]">Drives the pace, head-to-head and telemetry views</p>
-            </section>
-
-            <section className="rounded-xl border border-white/[0.08] bg-white/[0.018] p-5">
-              <p className="section-index mb-5">DATA COVERAGE</p>
-              <div className="space-y-3">
-                <CoverageRow label="Race results" value={hasRaceData ? `${results.length} rows` : "Unavailable"} ready={hasRaceData} />
-                <CoverageRow label="Season standings" value={standings.length ? `${standings.length} drivers` : "Unavailable"} ready={standings.length > 0} />
-                <CoverageRow label="Win forecast" value={predictionCount ? `${predictionCount} rows` : "No forecast"} ready={predictionCount > 0} />
-                <CoverageRow label="Circuit dimension" value={selectedCircuit ? (raceForCircuit.has(selectedCircuit.id) ? "Linked" : `No ${season} race`) : `${seasonCircuits.length} season circuits`} ready={selectedCircuit ? raceForCircuit.has(selectedCircuit.id) : seasonCircuits.length > 0} />
-              </div>
-              <p className="mt-5 border-t border-white/[0.06] pt-4 text-caption leading-relaxed text-white/[0.66]">The lab never fills a missing race, market or prediction with a guessed value.</p>
-            </section>
-
-            <section className="rounded-xl border border-white/[0.08] bg-white/[0.018] p-5">
-              <p className="section-index mb-5">PROVENANCE</p>
-              <div className="space-y-3">
-                <CoverageRow label="Primary source" value="Live API" ready />
-                <CoverageRow label="Race payload" value={round == null ? "Unavailable" : `${season} / ${selectedRoundLabel ?? raceLabel(selectedRace?.name ?? "race")}`} ready={round != null} />
-                <CoverageRow label="Source timestamp" value={formatSourceTimestamp(sourceTimestamp)} ready={sourceTimestamp != null} />
-                <CoverageRow
-                  label="Dataset coverage"
-                  value={datasetCoverageValue}
-                  ready={datasetCoverageReady}
-                />
-                <CoverageRow
-                  label="Projection freshness"
-                  value={formatSourceTimestamp(ingestionReadiness?.projection.projected_at ?? null)}
-                  ready={ingestionReadiness?.projection.projected_at != null}
-                />
-                <CoverageRow
-                  label="Unavailable datasets"
-                  value={unavailableDatasetNames.length ? unavailableDatasetNames.join(", ") : "None"}
-                  ready={unavailableDatasetNames.length === 0 && requiredDatasets.length > 0}
-                />
-              </div>
-              <p className="mt-5 border-t border-white/[0.06] pt-4 text-caption leading-relaxed text-white/[0.66]">Freshness comes from the API response envelope; the Lab never infers it from the browser clock.</p>
-            </section>
-          </aside>
-        </div>
-
-        <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-          <LazyView id="lab-championship" placeholder={<ViewPlaceholder id="lab-championship" index="02 / Championship" title="Championship progression" />}>
-            <ChampionshipView context={viewContext} />
-          </LazyView>
-          <LazyView id="lab-constructors" placeholder={<ViewPlaceholder id="lab-constructors" index="07 / Constructors" title="Constructors' championship" />}>
-            <ConstructorsView context={viewContext} />
-          </LazyView>
-        </div>
-
-        <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <PaceView context={viewContext} />
-          <FastestLapsView context={viewContext} />
-        </div>
-
-        <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <StrategyView context={viewContext} />
-          <RaceTimelineView context={viewContext} />
-        </div>
-
-        <section id="lab-head-to-head" aria-label="Driver head-to-head" className="mt-4 scroll-mt-28 rounded-xl border border-white/[0.10] bg-white/[0.02]">
-          <div className="flex flex-col gap-3 border-b border-white/[0.06] px-4 py-4 md:flex-row md:items-end md:justify-between md:px-6">
-            <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-white/[0.62]">08 / Head-to-head</p>
-              <h2 className="mt-1 font-serif text-h3 text-light">Selected drivers, one evidence set</h2>
-              <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.08em] text-white/[0.66]">
-                {raceScopeLabel ? `${season} · ${raceScopeLabel}` : season} · {driverHeadToHead.length} selected drivers · missing values stay unavailable
-              </p>
             </div>
-            <ViewActions title="Driver head-to-head" endpoints={tableEndpoints} exportRows={headToHeadExportRows} exportName={exportBasename("head-to-head", season, roundSlug)} />
-          </div>
-          {driverHeadToHead.length < 2 ? (
-            <div className="px-4 py-6 md:px-6">
-              <SessionEmpty title="Select at least two drivers" detail="Choose two to four drivers in the field view to populate this head-to-head." />
-            </div>
-          ) : (
-            <>
-              <div className="overflow-x-auto px-4 py-5 md:px-6" tabIndex={0} aria-label="Head-to-head table">
-                <table className="w-full min-w-[720px] border-collapse text-left">
-                  <thead>
-                    <tr className="border-b border-white/[0.06] font-mono text-[11px] uppercase tracking-[0.1em] text-white/[0.66]">
-                      <th scope="col" className="py-3 pr-4">Driver</th>
-                      <th scope="col" className="px-3 py-3">Championship</th>
-                      <th scope="col" className="px-3 py-3">Points</th>
-                      <th scope="col" className="px-3 py-3">Wins</th>
-                      <th scope="col" className="px-3 py-3">Grid</th>
-                      <th scope="col" className="px-3 py-3">Finish</th>
-                      <th scope="col" className="px-3 py-3">Win chance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {driverHeadToHead.map((driver) => (
-                      <tr key={driver.id} className="border-b border-white/[0.04]">
-                        <th scope="row" className="py-4 pr-4 font-normal">
-                          <span className="block font-mono text-[12px] uppercase tracking-[0.07em]" style={{ color: readableTeamColor(driver.team) }}>{driver.code}</span>
-                          <span className="mt-1 block text-body-sm text-white/[0.84]">{driver.name}</span>
-                          <span className="mt-0.5 flex items-center gap-1.5 text-caption text-white/[0.66]"><span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: teamColor(driver.team) }} />{driver.team}</span>
-                        </th>
-                        {Object.entries(driver.metrics).map(([metricKey, value]) => (
-                          <td key={metricKey} className={`px-3 py-4 font-mono text-[12px] tabular-nums ${value === "Unavailable" ? "text-amber-400" : "text-white/[0.84]"}`}>
-                            {value}
-                          </td>
-                        ))}
+            {fieldMode === "table" ? explorerTable : isLoadingRace && metric !== "seasonPoints" ? <ViewSkeleton label="Loading race data" rows={10} /> : raceError && metric !== "seasonPoints" ? <NotPublished title="Live data unavailable" detail={raceError} tone="amber" /> : chartRows.length === 0 ? <NotPublished title="No values for this measure" detail={`The API returned no ${activeMetric.label.toLowerCase()} for the current selection${filterParts.length ? ` and filter (${filterLabel})` : ""}.`} tone="amber" /> : (
+              <TeamBars
+                rows={chartRows.map((row, index) => ({
+                  id: row.id,
+                  rank: metric === "seasonPoints" ? row.seasonPosition ?? index + 1 : index + 1,
+                  label: row.name.split(" ").at(-1) ?? row.name,
+                  sub: row.team,
+                  color: teamColor(row.team),
+                  textColor: readableTeamColor(row.team),
+                  value: getMetricValue(row, metric) as number,
+                  display: formatValue(metric, getMetricValue(row, metric)),
+                  selected: selectedDrivers.includes(row.id),
+                }))}
+                lowerIsBetter={metric === "raceFinish" || metric === "grid"}
+                onToggle={(id) => toggleDriver(Number(id))}
+                toggleLabel={(row) => `${row.selected ? "Remove" : "Add"} ${row.label} ${row.selected ? "from" : "to"} comparison`}
+              />
+            )}
+          </ViewCard>
+        );
+      case "h2h":
+        return (
+          <ViewCard
+            id="lab-head-to-head"
+            title="Head-to-head"
+            scope={`${raceScopeLabel ? `${season} · ${raceScopeLabel}` : season} · ${driverHeadToHead.length} selected drivers · missing values stay unavailable`}
+            endpoints={tableEndpoints}
+            source={{ source: "tdd", timestamp: sourceTimestamp }}
+            exportRows={headToHeadExportRows}
+            exportName={exportBasename("head-to-head", season, roundSlug)}
+          >
+            {driverHeadToHead.length < 2 ? (
+              <NotPublished title="Select at least two drivers" detail="Add drivers with “+ Driver” in the bar above, or pick a ready-made comparison in the panel." />
+            ) : (
+              <>
+                <div className="overflow-x-auto" tabIndex={0} aria-label="Head-to-head table">
+                  <table className="w-full min-w-[720px] border-collapse text-left">
+                    <thead>
+                      <tr className={tableHead}>
+                        <th scope="col" className="py-2 pr-4">Driver</th>
+                        <th scope="col" className="px-3 py-2">Championship</th>
+                        <th scope="col" className="px-3 py-2">Points</th>
+                        <th scope="col" className="px-3 py-2">Wins</th>
+                        <th scope="col" className="px-3 py-2">Grid</th>
+                        <th scope="col" className="px-3 py-2">Finish</th>
+                        <th scope="col" className="px-3 py-2">Win chance</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <HeadToHeadRecord context={viewContext} />
-            </>
-          )}
-        </section>
-
-        <section id="lab-sessions" aria-label="Session explorer" className="mt-4 scroll-mt-28 rounded-xl border border-white/[0.08] bg-white/[0.018]">
-          <div className="flex flex-col gap-3 border-b border-white/[0.06] px-4 py-4 md:flex-row md:items-end md:justify-between md:px-6">
-            <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-white/[0.62]">09 / Sessions</p>
-              <h2 className="mt-1 font-serif text-h3 text-light">Race weekend evidence</h2>
-              <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.08em] text-white/[0.66]">
-                {raceScopeLabel ? `${season} · ${raceScopeLabel}` : season} · {formatSourceTimestamp(sessionSourceMeta?.data_fetched_at ?? sessionTimestamp)}
-              </p>
-              {sessionSourceMeta?.source === "openf1.org" ? (
-                <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.08em] text-white/[0.66]">
-                  OpenF1 historical ·{" "}
-                  <a href={sessionSourceMeta.license_url ?? undefined} target="_blank" rel="noreferrer" className="text-light underline underline-offset-2">
-                    {sessionSourceMeta.license}
-                  </a>{" "}
-                  · {sessionSourceMeta.adaptation_notice}
-                </p>
-              ) : (
-                <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.08em] text-white/[0.66]">Official / API</p>
-              )}
-            </div>
-            <ViewActions title="Session explorer" endpoints={sessionEndpoints} exportRows={sessionExportRows} exportName={exportBasename(`session-${sessionView}`, season, roundSlug)} />
-          </div>
-          <div className="flex flex-wrap gap-2 border-b border-white/[0.06] px-4 py-3 md:px-6" role="tablist" aria-label="Race weekend session">
-            {([
-              ["race", "Race", hasRaceData ? results.length : 0],
-              ["practice", "Practice", practiceRows.length],
-              ["qualifying", "Qualifying", qualifying?.length ?? 0],
-              ["qualifyingPrediction", "Qualifying forecast", qualifyingPrediction?.length ?? 0],
-              ["telemetry", "Telemetry", null],
-            ] as [SessionView, string, number | null][]).map(([key, label, count]) => (
-              <button key={key} type="button" role="tab" aria-selected={sessionView === key} onClick={() => setSessionView(key)} className={`min-h-10 rounded-md border px-3 py-2 font-mono text-[11px] uppercase tracking-[0.08em] ${sessionView === key ? "border-teal/40 bg-teal/[0.08] text-teal" : "border-white/[0.08] text-white/[0.72] hover:text-light"}`}>
-                {label}
-                {count != null && <span className={`ml-2 tabular-nums ${count ? "text-white/[0.80]" : "text-white/[0.55]"}`}>{isLoadingSession && key !== "race" ? "…" : count || "none"}</span>}
-              </button>
-            ))}
-          </div>
-          <div className="px-4 py-5 md:px-6">
-            {sessionView === "race" ? <p className="text-body-sm text-white/[0.66]">Race results are shown in the field view, the head-to-head and the data explorer for {raceScopeLabel ? `${season} / ${raceScopeLabel}` : season}.</p> : sessionView === "telemetry" ? <TelemetryPanel context={viewContext} /> : isLoadingSession ? <ViewSkeleton label="Loading session data" rows={5} /> : sessionView === "practice" ? (
-              <PracticeBestPanel summary={practiceBest} sources={sessionEndpoints.map((endpoint) => `GET ${endpoint}`)} />
-            ) : sessionView === "qualifying" ? qualifying?.length ? (
-              <div className="overflow-x-auto" tabIndex={0} aria-label="Qualifying classification"><table className="w-full min-w-[680px] border-collapse text-left"><thead><tr className="border-b border-white/[0.06] font-mono text-[11px] uppercase tracking-[0.1em] text-white/[0.66]"><th className="py-3 pr-4">Pos.</th><th className="px-3 py-3">Driver</th><th className="px-3 py-3">Team</th><th className="px-3 py-3">Q1</th><th className="px-3 py-3">Q2</th><th className="px-3 py-3">Q3</th></tr></thead><tbody>{qualifying.slice(0, 22).map((row) => <tr key={`${row.position}-${row.first_name}-${row.last_name}`} className="border-b border-white/[0.04]"><td className="py-3 pr-4 font-mono text-[12px] tabular-nums text-white/[0.66]">{row.position}</td><td className="px-3 py-3 text-body-sm text-white/[0.84]">{row.first_name} {row.last_name}</td><td className="px-3 py-3 text-body-sm text-white/[0.66]"><span className="flex items-center gap-1.5"><span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: teamColor(row.team) }} />{row.team}</span></td><td className="px-3 py-3 font-mono text-[12px] tabular-nums text-white/[0.72]">{row.q1 ?? "—"}</td><td className="px-3 py-3 font-mono text-[12px] tabular-nums text-white/[0.72]">{row.q2 ?? "—"}</td><td className="px-3 py-3 font-mono text-[12px] tabular-nums text-white/[0.72]">{row.q3 ?? "—"}</td></tr>)}</tbody></table><p className="mt-3 font-mono text-[11px] uppercase tracking-[0.06em] text-white/[0.62]">— in Q2 / Q3: eliminated in an earlier part, no time set.</p></div>
-            ) : qualifyingWithheld ? <NotPublished title="Qualifying result under verification" detail="The official qualifying classification for this round is withheld until its driver identities pass the integrity check. The Lab does not substitute a prediction for a measured result." source={round == null ? null : `GET /v1/f1/races/${season}/${round}/qualifying`} tone="amber" /> : <NotPublished detail="The API returned no qualifying result for this round. The Lab does not substitute a prediction for a measured result." source={round == null ? null : `GET /v1/f1/races/${season}/${round}/qualifying`} /> : qualifyingPrediction?.length ? (
-              <div className="overflow-x-auto" tabIndex={0} aria-label="Qualifying forecast"><table className="w-full min-w-[620px] border-collapse text-left"><thead><tr className="border-b border-white/[0.06] font-mono text-[11px] uppercase tracking-[0.1em] text-white/[0.66]"><th className="py-3 pr-4">Rank</th><th className="px-3 py-3">Driver</th><th className="px-3 py-3">Expected pos.</th><th className="px-3 py-3">Pole</th><th className="px-3 py-3">Q3</th></tr></thead><tbody>{qualifyingPrediction.slice(0, 22).map((row) => <tr key={row.driver_name} className="border-b border-white/[0.04]"><td className="py-3 pr-4 font-mono text-[12px] tabular-nums text-white/[0.66]">{row.position}</td><td className="px-3 py-3 text-body-sm text-white/[0.84]">{row.driver_name}</td><td className="px-3 py-3 font-mono text-[12px] tabular-nums text-white/[0.72]">{row.expected_position.toFixed(1)}</td><td className="px-3 py-3 font-mono text-[12px] tabular-nums text-teal">{(row.p_pole * 100).toFixed(1)}%</td><td className="px-3 py-3 font-mono text-[12px] tabular-nums text-white/[0.72]">{(row.p_q3 * 100).toFixed(0)}%</td></tr>)}</tbody></table></div>
-            ) : <NotPublished title="No qualifying forecast published" detail="The API returned no qualifying forecast for this round. No probability is fabricated." source={round == null ? null : `GET /v1/f1/predictions/qualifying/${season}/${round}`} />}
-          </div>
-        </section>
-
-        <section id="lab-seasons" aria-label="Season comparison" className="mt-4 scroll-mt-28 rounded-xl border border-white/[0.08] bg-white/[0.018]">
-          <div className="flex flex-col gap-3 border-b border-white/[0.06] px-4 py-4 md:flex-row md:items-end md:justify-between md:px-6">
-            <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-white/[0.62]">10 / Seasons</p>
-              <h2 className="mt-1 font-serif text-h3 text-light">One driver, historical seasons</h2>
-              <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.08em] text-white/[0.66]">{comparisonRows.length} seasons · final or current standings · seasons are never blended</p>
-            </div>
-            <div className="flex flex-col gap-2 md:items-end">
-              <label className="block min-w-[250px]"><span className="sr-only">Driver</span><select aria-label="Driver across seasons" value={comparisonDriver} onChange={(event) => setComparisonDriver(event.target.value)} className="control-select"><option value="">Choose a driver</option>{comparisonOptions.map((driver) => <option key={driver.id} value={driver.id}>{driver.tla} · {driver.name}</option>)}</select></label>
-              <ViewActions title="Season comparison" endpoints={comparisonRows.map(({ year }) => `/v1/f1/standings/drivers/${year}`)} exportRows={comparisonExportRows} exportName={exportBasename("season-comparison", season, null)} />
-            </div>
-          </div>
-          <div className="overflow-x-auto px-4 py-5 md:px-6" tabIndex={0} aria-label="Season comparison table"><table className="w-full min-w-[620px] border-collapse text-left"><thead><tr className="border-b border-white/[0.06] font-mono text-[11px] uppercase tracking-[0.1em] text-white/[0.66]"><th className="py-3 pr-4">Season</th><th className="px-3 py-3">Driver</th><th className="px-3 py-3">Position</th><th className="px-3 py-3">Points</th><th className="px-3 py-3">Wins</th><th className="px-3 py-3">Freshness</th></tr></thead><tbody>{comparisonRows.map(({ year, standing, timestamp, unavailable }) => { const selected = comparisonOptions.find((driver) => String(driver.id) === comparisonDriver); return <tr key={year} className="border-b border-white/[0.04]"><td className="py-3 pr-4 font-mono text-[12px] text-teal">{year}</td><td className="px-3 py-3 text-body-sm text-white/[0.84]">{standing ? <><span className="font-mono text-[12px]" style={{ color: readableTeamColor(standing.team_name) }}>{driverTla(standing.first_name, standing.last_name)}</span><span className="ml-2">{standing.first_name} {standing.last_name}</span></> : selected ? <><span className="font-mono text-[12px] text-teal">{selected.tla}</span><span className="ml-2">{selected.name}</span></> : "No driver chosen"}</td><td className="px-3 py-3 font-mono text-[12px] tabular-nums text-white/[0.72]">{unavailable ? "UNAVAILABLE" : standing?.position ?? "NOT IN SEASON"}</td><td className="px-3 py-3 font-mono text-[12px] tabular-nums text-white/[0.84]">{standing?.points ?? (unavailable ? "Unavailable" : "Not classified")}</td><td className="px-3 py-3 font-mono text-[12px] tabular-nums text-white/[0.72]">{standing?.wins ?? (unavailable ? "Unavailable" : "Not classified")}</td><td className="px-3 py-3 font-mono text-[11px] text-white/[0.66]">{unavailable ? "UNAVAILABLE" : timestamp ? formatSourceTimestamp(timestamp) : "Not published by the API"}</td></tr>; })}</tbody></table></div>
-        </section>
-
-        <section id="lab-ask" aria-label="Ask the data" className="mt-4 grid scroll-mt-28 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="rounded-xl border border-white/[0.10] bg-white/[0.02] p-5 md:p-6"><p className="font-mono text-[11px] uppercase tracking-[0.12em] text-white/[0.62]">11 / Ask the data</p><h2 className="mt-1 font-serif text-h3 text-light">Turn a question into a query.</h2><p className="mt-2 max-w-xl text-body-sm leading-relaxed text-white/[0.66]">{askMode === "grounded" ? "Ask the grounded endpoint after choosing the evidence above. Answers stay tied to published data and sources." : "Bring your own AI model: it may answer only from The Data Driver API tools it calls, and must cite them."}</p>
-            <div role="group" aria-label="Answer mode" className="mt-4 inline-flex rounded-lg border border-white/[0.10] p-1">
-              {([["grounded", "Grounded (default)"], ["ai", "AI — your own key"]] as const).map(([value, label]) => (
-                <button key={value} type="button" aria-pressed={askMode === value} onClick={() => setAskMode(value)} className={`min-h-9 rounded-md px-3 font-mono text-[11px] uppercase tracking-[0.08em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 ${askMode === value ? "bg-white/[0.08] text-light" : "text-white/[0.66] hover:text-light"}`}>{label}</button>
+                    </thead>
+                    <tbody>
+                      {driverHeadToHead.map((driver) => (
+                        <tr key={driver.id} className="border-b border-white/[0.04]">
+                          <th scope="row" className="py-3 pr-4 font-normal">
+                            <span className="block font-mono text-[12px]" style={{ color: readableTeamColor(driver.team) }}>{driver.code}</span>
+                            <span className="mt-0.5 block text-[14px] text-white/[0.86]">{driver.name}</span>
+                            <span className="mt-0.5 flex items-center gap-1.5 text-[12px] text-white/[0.66]"><span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: teamColor(driver.team) }} />{driver.team}</span>
+                          </th>
+                          {Object.entries(driver.metrics).map(([metricKey, value]) => (
+                            <td key={metricKey} className={`px-3 py-3 font-mono text-[13px] tabular-nums ${value === "Unavailable" ? "text-amber-400" : "text-white/[0.86]"}`}>
+                              {value}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <HeadToHeadRecord context={viewContext} />
+              </>
+            )}
+          </ViewCard>
+        );
+      case "sessions":
+        return (
+          <ViewCard
+            id="lab-sessions"
+            title="Race weekend sessions"
+            scope={`${raceScopeLabel ? `${season} · ${raceScopeLabel}` : season} · ${sessionSourceMeta?.source === "openf1.org" ? "OpenF1 historical enrichment, non-official" : "official / API"}`}
+            endpoints={sessionEndpoints}
+            source={sessionSourceMeta ?? { source: "tdd", timestamp: sessionTimestamp }}
+            exportRows={sessionExportRows}
+            exportName={exportBasename(`session-${sessionView}`, season, roundSlug)}
+          >
+            <div className="mb-4 flex flex-wrap gap-1.5" role="tablist" aria-label="Race weekend session">
+              {([
+                ["race", "Race", hasRaceData ? results.length : 0],
+                ["practice", "Practice", practiceRows.length],
+                ["qualifying", "Qualifying", qualifying?.length ?? 0],
+                ["qualifyingPrediction", "Qualifying forecast", qualifyingPrediction?.length ?? 0],
+                ["telemetry", "Telemetry", null],
+              ] as [SessionView, string, number | null][]).map(([key, label, count]) => (
+                <button key={key} type="button" role="tab" aria-selected={sessionView === key} onClick={() => setSessionView(key)} className={`min-h-11 rounded-md border px-3 text-[13px] lg:min-h-10 ${sessionView === key ? "border-white/[0.24] bg-white/[0.08] text-light" : "border-white/[0.08] text-white/[0.78] hover:text-light"}`}>
+                  {label}
+                  {count != null && <span className={`ml-2 font-mono text-[12px] tabular-nums ${count ? "text-white/[0.84]" : "text-white/[0.62]"}`}>{isLoadingSession && key !== "race" ? "…" : count || "none"}</span>}
+                </button>
               ))}
             </div>
-            {askMode === "grounded" ? <><form className="mt-5 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => { event.preventDefault(); void askQuestion(); }}><label htmlFor="lab-question" className="sr-only">Question about the selected F1 data</label><input id="lab-question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="e.g. Who gained the most positions?" className="control-input flex-1" /><button type="submit" disabled={!question.trim() || isAsking} className="min-h-11 rounded-lg bg-teal px-4 py-3 font-mono text-[11px] uppercase tracking-[0.1em] text-dark disabled:cursor-not-allowed disabled:opacity-40">{isAsking ? "Querying…" : "Ask ↗"}</button></form>{answer && <div className="mt-5 border-t border-teal/15 pt-5" aria-live="polite"><p className="text-body leading-relaxed text-white/[0.80]">{answer.answer}</p>{answer.sources.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{answer.sources.map((source, index) => <SourceCitation key={`${source.href ?? "text"}:${source.title}:${index}`} source={source} />)}</div>}</div>}</> : <AskAiPanel season={LIVE_SEASON} />}
-          </div>
-          {askMode === "grounded" ? <div className="rounded-xl border border-white/[0.08] bg-white/[0.018] p-5"><p className="section-index mb-4">TRY A QUESTION</p><div className="space-y-1">{starterQuestions.map((starter) => <button key={starter} type="button" onClick={() => handleStarterQuestion(starter)} aria-label={`Ask: ${starter}`} data-question={starter} className="flex w-full items-start justify-between gap-3 rounded-lg px-3 py-3 text-left text-body-sm text-white/[0.70] hover:bg-white/[0.04] hover:text-light"><span>{starter}</span><span className="text-teal">↗</span></button>)}</div></div> : (
-            <div className="rounded-xl border border-white/[0.08] bg-white/[0.018] p-5 text-body-sm leading-relaxed text-white/[0.70]">
-              <p className="section-index mb-4">HOW AI MODE WORKS</p>
-              <ul className="space-y-3">
-                <li>Your key stays in this browser. Requests go straight from this page to the provider you choose, never through The Data Driver.</li>
-                <li>The key is kept for this tab only unless you tick &ldquo;Remember on this device&rdquo;. &ldquo;Forget key&rdquo; stops a running question and removes it.</li>
-                <li>The model can only read the public API through read-only tools. Each answer lists the tool calls and the sources it read; OpenF1 data is non-official enrichment (CC BY-NC-SA 4.0).</li>
-                <li>Models can still make mistakes: check the sources. The grounded mode stays the default.</li>
-              </ul>
-              <a href={AI_GUIDE_URL} className="mt-4 inline-block font-mono text-[11px] uppercase tracking-[0.1em] text-teal hover:underline">Providers, local models and CORS ↗</a>
+            {sessionView === "race" ? <p className="text-[14px] text-white/[0.72]">Race results are in the race report, the field (table) and the head-to-head for {raceScopeLabel ? `${season} / ${raceScopeLabel}` : season}.</p> : sessionView === "telemetry" ? <TelemetryPanel context={viewContext} /> : isLoadingSession ? <ViewSkeleton label="Loading session data" rows={5} /> : sessionView === "practice" ? (
+              <PracticeBestPanel summary={practiceBest} sources={sessionEndpoints.map((endpoint) => `GET ${endpoint}`)} />
+            ) : sessionView === "qualifying" ? qualifying?.length ? (
+              <div className="overflow-x-auto" tabIndex={0} aria-label="Qualifying classification"><table className="w-full min-w-[680px] border-collapse text-left"><thead><tr className={tableHead}><th scope="col" className="py-2 pr-4">Pos.</th><th scope="col" className="px-3 py-2">Driver</th><th scope="col" className="px-3 py-2">Team</th><th scope="col" className="px-3 py-2">Q1</th><th scope="col" className="px-3 py-2">Q2</th><th scope="col" className="px-3 py-2">Q3</th></tr></thead><tbody>{qualifying.slice(0, 22).map((row) => <tr key={`${row.position}-${row.first_name}-${row.last_name}`} className="border-b border-white/[0.04]"><td className="py-2 pr-4 font-mono text-[13px] tabular-nums text-white/[0.66]">{row.position}</td><td className="px-3 py-2 text-[14px] text-white/[0.86]">{row.first_name} {row.last_name}</td><td className="px-3 py-2 text-[13px] text-white/[0.70]"><span className="flex items-center gap-1.5"><span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: teamColor(row.team) }} />{row.team}</span></td><td className={tableCell}>{row.q1 ?? "—"}</td><td className={tableCell}>{row.q2 ?? "—"}</td><td className={tableCell}>{row.q3 ?? "—"}</td></tr>)}</tbody></table><p className="mt-2 text-[12px] text-white/[0.62]">— in Q2 / Q3: eliminated in an earlier part, no time set.</p></div>
+            ) : qualifyingWithheld ? <NotPublished title="Qualifying result under verification" detail="The official qualifying classification for this round is withheld until its driver identities pass the integrity check. The Lab does not substitute a prediction for a measured result." source={round == null ? null : `GET /v1/f1/races/${season}/${round}/qualifying`} tone="amber" /> : <NotPublished detail="The API returned no qualifying result for this round. The Lab does not substitute a prediction for a measured result." source={round == null ? null : `GET /v1/f1/races/${season}/${round}/qualifying`} /> : qualifyingPrediction?.length ? (
+              <div className="overflow-x-auto" tabIndex={0} aria-label="Qualifying forecast"><table className="w-full min-w-[620px] border-collapse text-left"><thead><tr className={tableHead}><th scope="col" className="py-2 pr-4">Rank</th><th scope="col" className="px-3 py-2">Driver</th><th scope="col" className="px-3 py-2">Expected pos.</th><th scope="col" className="px-3 py-2">Pole</th><th scope="col" className="px-3 py-2">Q3</th></tr></thead><tbody>{qualifyingPrediction.slice(0, 22).map((row) => <tr key={row.driver_name} className="border-b border-white/[0.04]"><td className="py-2 pr-4 font-mono text-[13px] tabular-nums text-white/[0.66]">{row.position}</td><td className="px-3 py-2 text-[14px] text-white/[0.86]">{row.driver_name}</td><td className={tableCell}>{row.expected_position.toFixed(1)}</td><td className={tableCell}>{(row.p_pole * 100).toFixed(1)}%</td><td className={tableCell}>{(row.p_q3 * 100).toFixed(0)}%</td></tr>)}</tbody></table></div>
+            ) : <NotPublished title="No qualifying forecast published" detail="The API returned no qualifying forecast for this round. No probability is fabricated." source={round == null ? null : `GET /v1/f1/predictions/qualifying/${season}/${round}`} />}
+          </ViewCard>
+        );
+      case "seasons":
+        return (
+          <ViewCard
+            id="lab-seasons"
+            title="One driver across seasons"
+            scope={`${comparisonRows.length} seasons · final or current standings · seasons are never blended`}
+            endpoints={comparisonRows.map(({ year }) => `/v1/f1/standings/drivers/${year}`)}
+            source={{ source: "tdd" }}
+            exportRows={comparisonExportRows}
+            exportName={exportBasename("season-comparison", season, null)}
+            actions={<label className="block w-[150px] sm:w-[220px]"><span className="sr-only">Driver</span><select aria-label="Driver across seasons" value={comparisonDriver} onChange={(event) => { setComparisonDriver(event.target.value); setHasExplicitComparisonDriver(true); }} className="control-select"><option value="">Choose a driver</option>{comparisonOptions.map((driver) => <option key={driver.id} value={driver.id}>{driver.tla} · {driver.name}</option>)}</select></label>}
+          >
+            <div className="overflow-x-auto" tabIndex={0} aria-label="Season comparison table"><table className="w-full min-w-[620px] border-collapse text-left"><thead><tr className={tableHead}><th scope="col" className="py-2 pr-4">Season</th><th scope="col" className="px-3 py-2">Driver</th><th scope="col" className="px-3 py-2">Position</th><th scope="col" className="px-3 py-2">Points</th><th scope="col" className="px-3 py-2">Wins</th><th scope="col" className="px-3 py-2">Freshness</th></tr></thead><tbody>{comparisonRows.map(({ year, standing, timestamp, unavailable }) => { const selected = comparisonOptions.find((driver) => String(driver.id) === comparisonDriver); return <tr key={year} className="border-b border-white/[0.04]"><td className="py-2 pr-4 font-mono text-[13px] text-light">{year}</td><td className="px-3 py-2 text-[14px] text-white/[0.86]">{standing ? <><span className="font-mono text-[12px]" style={{ color: readableTeamColor(standing.team_name) }}>{driverTla(standing.first_name, standing.last_name)}</span><span className="ml-2">{standing.first_name} {standing.last_name}</span></> : selected ? <><span className="font-mono text-[12px]">{selected.tla}</span><span className="ml-2">{selected.name}</span></> : "No driver chosen"}</td><td className={tableCell}>{unavailable ? "Unavailable" : standing?.position ?? "Not in season"}</td><td className={tableCell}>{standing?.points ?? (unavailable ? "Unavailable" : "Not classified")}</td><td className={tableCell}>{standing?.wins ?? (unavailable ? "Unavailable" : "Not classified")}</td><td className="px-3 py-2 text-[13px] text-white/[0.70]">{unavailable ? "Unavailable" : timestamp ? formatSourceTimestamp(timestamp) : "Not published by the API"}</td></tr>; })}</tbody></table></div>
+          </ViewCard>
+        );
+      case "ask":
+        return (
+          <section id="lab-ask" aria-labelledby="lab-ask-title" className="min-w-0 scroll-mt-32">
+            <h1 id="lab-ask-title" className="font-serif text-[26px] leading-8 tracking-[-0.02em] text-light md:text-[30px] md:leading-9">Ask the data</h1>
+            <p className="mt-1 max-w-2xl text-[14px] leading-5 text-white/[0.70]">{askMode === "grounded" ? `Answers come from the grounded endpoint and the race on screen (${raceScopeLabel ? `${season} · ${raceScopeLabel}` : season}), with their sources.` : "Bring your own AI model: it may answer only from The Data Driver API tools it calls, and must cite them."}</p>
+            <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.018] p-4 md:p-5">
+                <div role="group" aria-label="Answer mode" className="inline-flex rounded-lg border border-white/[0.10] p-1">
+                  {([["grounded", "Grounded (default)"], ["ai", "AI — your own key"]] as const).map(([value, label]) => (
+                    <button key={value} type="button" aria-pressed={askMode === value} onClick={() => setAskMode(value)} className={`min-h-11 rounded-md px-3 text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 lg:min-h-9 ${askMode === value ? "bg-white/[0.10] text-light" : "text-white/[0.72] hover:text-light"}`}>{label}</button>
+                  ))}
+                </div>
+                {askMode === "grounded" ? <><form className="mt-5 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => { event.preventDefault(); void askQuestion(); }}><label htmlFor="lab-question" className="sr-only">Question about the selected F1 data</label><input id="lab-question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="e.g. Who gained the most positions?" className="control-input flex-1" /><button type="submit" disabled={!question.trim() || isAsking} className="min-h-11 rounded-lg bg-light px-4 text-[14px] font-medium text-dark disabled:cursor-not-allowed disabled:opacity-50">{isAsking ? "Querying…" : "Ask"}</button></form>{answer && <div className="mt-5 border-t border-white/[0.08] pt-5" aria-live="polite"><p className="text-body leading-relaxed text-white/[0.86]">{answer.answer}</p>{answer.sources.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{answer.sources.map((source, index) => <SourceCitation key={`${source.href ?? "text"}:${source.title}:${index}`} source={source} />)}</div>}</div>}</> : <AskAiPanel season={LIVE_SEASON} />}
+              </div>
+              {askMode === "grounded" ? <div className="rounded-xl border border-white/[0.08] bg-white/[0.018] p-4"><h2 className="text-[14px] font-medium text-white/[0.86]">Try a question</h2><div className="mt-2 space-y-1">{starterQuestions.map((starter) => <button key={starter} type="button" onClick={() => handleStarterQuestion(starter)} aria-label={`Ask: ${starter}`} data-question={starter} className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 text-left text-[14px] text-white/[0.78] hover:bg-white/[0.04] hover:text-light"><span>{starter}</span><span aria-hidden="true" className="text-white/[0.66]">→</span></button>)}</div></div> : (
+                <div className="rounded-xl border border-white/[0.08] bg-white/[0.018] p-4 text-[14px] leading-relaxed text-white/[0.72]">
+                  <h2 className="mb-3 text-[14px] font-medium text-white/[0.86]">How AI mode works</h2>
+                  <ul className="space-y-3">
+                    <li>Your key stays in this browser. Requests go straight from this page to the provider you choose, never through The Data Driver.</li>
+                    <li>The key is kept for this tab only unless you tick &ldquo;Remember on this device&rdquo;. &ldquo;Forget key&rdquo; stops a running question and removes it.</li>
+                    <li>The model can only read the public API through read-only tools. Each answer lists the tool calls and the sources it read; OpenF1 data is non-official enrichment (CC BY-NC-SA 4.0).</li>
+                    <li>Models can still make mistakes: check the sources. The grounded mode stays the default.</li>
+                  </ul>
+                  <a href={AI_GUIDE_URL} className="mt-4 inline-block text-[14px] text-light underline-offset-4 hover:underline">Providers, local models and CORS →</a>
+                </div>
+              )}
             </div>
-          )}
-        </section>
+            <footer className="mt-3 text-[12px] leading-5 text-white/[0.62]">Source · The Data Driver API (grounded endpoint and read-only tools) · OpenF1 rows are non-official enrichment, CC BY-NC-SA 4.0.</footer>
+          </section>
+        );
+    }
+  }
 
-        <section id="lab-explorer" aria-label="Data explorer" className="mt-4 scroll-mt-28 rounded-xl border border-white/[0.08] bg-white/[0.018]">
-          <div className="flex flex-col gap-3 border-b border-white/[0.06] px-4 py-4 md:flex-row md:items-end md:justify-between md:px-6">
-            <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-white/[0.62]">12 / Explorer</p>
-              <h2 className="mt-1 font-serif text-h3 text-light">Inspect every row</h2>
-              <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.08em] text-white/[0.66]">{filteredRows.length} of {rows.length} drivers · {filterLabel} · same rows as the field view</p>
+  // A race that has not been run yet has no results: that is not an outage.
+  const raceNotRun = selectedRace != null && selectedRace.status !== "completed";
+  const statusMessages = [...new Set([seasonError, raceNotRun ? null : raceError, raceNotRun ? null : sessionError, view === "seasons" ? historicalSeasonError : null].filter((message): message is string => Boolean(message)))];
+  const apiContext = { open: apiOpen, setOpen: setApiOpen };
+
+  return (
+    <LabResourceProvider seed={initialSeed} refreshVersion={liveResourceVersion} raceScope={liveActive && round != null ? `/v1/f1/races/${season}/${round}/` : null}>
+    <ApiPanelContext.Provider value={apiContext}>
+    <ChartCursorProvider>
+    <div className="min-h-[calc(100vh-3.5rem)] bg-dark" data-lab-hydrated={hydrated ? "true" : undefined}>
+      <div className="border-b border-white/[0.06] bg-dark/95 backdrop-blur lg:sticky lg:top-14 lg:z-30" data-lab-bar>
+        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-2 px-4 py-2.5 lg:gap-2.5 lg:px-5">
+          {SITE_URL ? (
+            <p className="hidden font-serif text-[20px] leading-7 text-light sm:block lg:mr-1">Data Lab</p>
+          ) : (
+            <Link href="/" className="hidden font-serif text-[20px] leading-7 text-light sm:block lg:mr-1">Data Lab</Link>
+          )}
+          <div className="flex min-w-0 flex-1 items-center gap-2 lg:flex-none">
+            <div className="min-w-0 flex-1 lg:flex-none">
+              <RacePicker
+                season={season}
+                seasons={AVAILABLE_SEASONS}
+                liveSeason={LIVE_SEASON}
+                races={calendar.map((race) => ({ round: race.round, label: `${officialRoundLabel(race) ? `${officialRoundLabel(race)} · ` : ""}${raceLabel(race.name)}`, date: formatDate(race.date), status: race.status }))}
+                round={round}
+                current={raceScopeLabel}
+                loading={isLoadingSeason}
+                onSeason={selectSeason}
+                onRace={selectRace}
+              />
             </div>
-            <div className="flex flex-col gap-2 md:items-end">
-              <div className="flex items-center gap-2"><span className="font-mono text-[11px] uppercase tracking-[0.1em] text-white/[0.66]">Sort</span>{(["position", "name", "metric"] as SortMode[]).map((mode) => <button key={mode} type="button" aria-pressed={sortMode === mode} onClick={() => setSortMode(mode)} className={`min-h-10 rounded-md border px-3 py-2 font-mono text-[11px] uppercase tracking-[0.08em] ${sortMode === mode ? "border-teal/30 text-teal" : "border-white/[0.08] text-white/[0.72] hover:text-light"}`}>{mode}</button>)}</div>
-              <ViewActions title="Data explorer" endpoints={tableEndpoints} exportRows={fieldExportRows} exportName={exportBasename("explorer", season, roundSlug)} />
-            </div>
+            <button type="button" onClick={() => setPaletteOpen(true)} aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K" aria-label="Search the Lab" className={`${barButton} min-w-10 justify-center px-2 lg:hidden`}>
+              <span aria-hidden="true">⌕</span>
+            </button>
           </div>
-          <div className="overflow-x-auto" tabIndex={0} aria-label="Data explorer table">
-            <table className="w-full min-w-[760px] border-collapse text-left">
-              <thead><tr className="border-b border-white/[0.06] font-mono text-[11px] uppercase tracking-[0.1em] text-white/[0.66]"><th className="px-4 py-3 md:px-6">Driver</th><th className="px-3 py-3">Team</th><th className="px-3 py-3">Season pos.</th><th className="px-3 py-3">Points</th><th className="px-3 py-3">Race finish</th><th className="px-3 py-3">Grid</th><th className="px-3 py-3">Win %</th><th className="px-4 py-3 text-right md:px-6">Status</th></tr></thead>
-              <tbody>{filteredRows.map((row) => { const isSelected = selectedDrivers.includes(row.id); return <tr key={row.id} className={`border-b border-white/[0.04] transition-colors hover:bg-white/[0.035] ${isSelected ? "bg-white/[0.04]" : ""}`}><td className="px-4 py-2 md:px-6"><button type="button" aria-label={`Select ${row.name} for comparison`} aria-pressed={isSelected} onClick={() => toggleDriver(row.id)} className={`min-h-11 rounded px-2 text-left font-mono text-[12px] uppercase tracking-[0.05em] hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 ${isSelected ? "text-light" : "text-white/[0.84]"}`}><span>{row.name}</span><span className="ml-2 font-mono text-[11px]" style={{ color: readableTeamColor(row.team) }}>{row.code}</span></button></td><td className="px-3 py-2 text-body-sm text-white/[0.70]"><span className="flex items-center gap-1.5"><span aria-hidden="true" className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: teamColor(row.team) }} />{row.team}</span></td><td className="px-3 py-2 font-mono text-[12px] tabular-nums text-white/[0.72]">{row.seasonPosition ?? "—"}</td><td className="px-3 py-2 font-mono text-[12px] tabular-nums text-white/[0.84]">{formatValue("seasonPoints", row.seasonPoints)}</td><td className="px-3 py-2 font-mono text-[12px] tabular-nums text-white/[0.72]">{formatValue("raceFinish", row.racePosition)}</td><td className="px-3 py-2 font-mono text-[12px] tabular-nums text-white/[0.72]">{formatValue("grid", row.grid)}</td><td className="px-3 py-2 font-mono text-[12px] tabular-nums text-teal">{formatValue("winProbability", row.winProbability)}</td><td className="px-4 py-2 text-right font-mono text-[11px] uppercase tracking-[0.06em] text-white/[0.66] md:px-6">{row.status ?? "season data"}</td></tr>; })}</tbody>
-            </table>
-            {filteredRows.length === 0 && <div className="px-5 py-12 text-center text-body-sm text-white/[0.66]">No rows match this query.</div>}
+          <div className="w-full min-w-0 lg:w-auto">
+            <DriverChips
+              selected={selectedDriverRefs}
+              available={buildRows(standings, [], null).map((row) => ({ id: row.id, code: row.code, name: row.name, team: row.team }))}
+              max={4}
+              onToggle={toggleDriver}
+            />
           </div>
-          <p className="border-t border-white/[0.06] px-4 py-3 font-mono text-[11px] uppercase tracking-[0.06em] text-white/[0.62] md:px-6">— means the API publishes no value for that cell (for example no race result for a driver who only appears in the standings).</p>
-        </section>
+          <span className="hidden flex-1 lg:block" />
+          <div className="w-full min-w-0 lg:w-auto">{sessionStatus}</div>
+          <div className="hidden items-center gap-1.5 lg:flex">
+            <button type="button" onClick={() => setPaletteOpen(true)} aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K" aria-label="Search the Lab (⌘K)" className={barButton}>
+              <kbd className="font-mono text-[12px]">⌘K</kbd>
+            </button>
+            <button type="button" aria-pressed={apiOpen} onClick={() => setApiOpen((open) => !open)} className={`${barButton} font-mono text-[12px] ${apiOpen ? "bg-white/[0.10] text-light" : ""}`}>
+              {"</> API"}
+            </button>
+            <button type="button" onClick={() => void shareView()} className={`inline-flex min-h-10 items-center rounded-lg bg-light px-3.5 text-[13px] font-medium text-dark hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70`}>
+              {shareState === "copied" ? "Link copied" : shareState === "failed" ? "Copy failed" : "Share view"}
+            </button>
+            {!SITE_URL && <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className={barButton}>Source ↗</a>}
+          </div>
+          <span className="sr-only" aria-live="polite">{shareState === "copied" ? "Link to this view copied" : shareState === "failed" ? "Copy failed" : ""}</span>
+        </div>
       </div>
+
+      <div ref={workspaceRef} className="mx-auto max-w-[1600px] scroll-mt-28 lg:grid lg:grid-cols-[200px_minmax(0,1fr)] xl:grid-cols-[200px_minmax(0,1fr)_300px]" data-workspace>
+        <div className="border-b border-white/[0.06] lg:sticky lg:top-[7.5rem] lg:max-h-[calc(100vh-7.5rem)] lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-r lg:px-2.5 lg:pb-6">
+          <ViewNav view={view} hrefFor={labQuery} onSelect={selectView} />
+        </div>
+        <div className="min-w-0 px-4 pb-8 pt-4 lg:px-7 lg:pb-16 lg:pt-6" data-view={view}>
+          {statusMessages.length > 0 && (
+            <section aria-label="System status" role="status" aria-live="polite" className="mb-4 flex flex-wrap items-baseline gap-x-2 rounded-lg border border-amber-400/25 bg-amber-400/[0.06] px-3 py-2 text-[13px]">
+              <span className="font-medium text-amber-400">Live data status:</span>
+              {statusMessages.map((message) => <span key={message} className="text-white/[0.78]">{message}</span>)}
+            </section>
+          )}
+          {renderView()}
+        </div>
+        <div className="border-t border-white/[0.06] px-4 pb-32 pt-6 lg:col-start-2 lg:px-7 lg:pb-12 xl:col-start-3 xl:row-start-1 xl:border-l xl:border-t-0 xl:px-5 xl:pb-12">
+          <LabInspector view={view} context={viewContext} onAsk={() => selectView("ask")} shortcuts={shortcuts} />
+        </div>
+      </div>
+
+      <MobileActionBar
+        onAsk={() => selectView("ask")}
+        menu={[
+          { label: shareState === "copied" ? "Link copied" : "Share view (copy link)", run: () => void shareView() },
+          { label: apiOpen ? "Hide API requests and export" : "Show API requests and export", run: () => setApiOpen((open) => !open) },
+          { label: "Search the Lab", run: () => setPaletteOpen(true) },
+        ]}
+      />
       {paletteOpen && <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={commands} />}
       <noscript>
         <style>{"[data-view-placeholder] [data-skeleton]{display:none}"}</style>
       </noscript>
     </div>
+    </ChartCursorProvider>
+    </ApiPanelContext.Provider>
     </LabResourceProvider>
   );
 }
-
-const LAB_VIEWS: { id: string; label: string; hint: string; keywords: string }[] = [
-  { id: "lab-field", label: "Field", hint: "01", keywords: "points finish grid laps win probability bars" },
-  { id: "lab-championship", label: "Championship", hint: "02", keywords: "progression standings evolution cumulative points" },
-  { id: "lab-constructors", label: "Constructors", hint: "07", keywords: "teams standings" },
-  { id: "lab-pace", label: "Pace", hint: "03", keywords: "lap times laps race pace" },
-  { id: "lab-fastest", label: "Fastest laps", hint: "05", keywords: "fastest lap gap" },
-  { id: "lab-strategy", label: "Strategy", hint: "04", keywords: "pit stops stints tyres" },
-  { id: "lab-timeline", label: "Race timeline", hint: "06", keywords: "safety car vsc incidents weather" },
-  { id: "lab-head-to-head", label: "Head-to-head", hint: "08", keywords: "compare drivers h2h" },
-  { id: "lab-sessions", label: "Sessions", hint: "09", keywords: "practice qualifying telemetry forecast" },
-  { id: "lab-seasons", label: "Seasons", hint: "10", keywords: "history archive career" },
-  { id: "lab-ask", label: "Ask", hint: "11", keywords: "question chat" },
-  { id: "lab-explorer", label: "Explorer", hint: "12", keywords: "table rows export" },
-];
 
 function PracticeBestPanel({ summary, sources }: { summary: PracticeBestSummary | null; sources: string[] }) {
   const rows = summary?.rows ?? [];
   const failed = summary?.failed ?? [];
   const unpublished = summary?.unpublished ?? [];
-  const reasons = Array.from(new Set(unpublished.map((item) => item.reason).filter((reason): reason is string => Boolean(reason))));
+  // The API gives one reason per session; when they differ only by the
+  // session name, the first is quoted verbatim and the others are named.
+  const reasonGroups = new Map<string, { reason: string; sessions: string[] }>();
+  for (const item of unpublished) {
+    if (!item.reason) continue;
+    const key = item.reason.replace(/\bFP[1-3]\b/g, "FP");
+    const group = reasonGroups.get(key);
+    if (group) group.sessions.push(item.session);
+    else reasonGroups.set(key, { reason: item.reason, sessions: [item.session] });
+  }
+  const reasons = [...reasonGroups.values()].map(({ reason, sessions }) => (sessions.length > 1 ? `${reason} Same for ${sessions.slice(1).join(", ")}.` : reason));
   const failedNote = failed.length
     ? `${failed.map((item) => `${item.session}${item.status ? ` (HTTP ${item.status})` : ""}`).join(", ")} could not be read`
     : null;
@@ -1923,64 +1948,44 @@ function PracticeBestPanel({ summary, sources }: { summary: PracticeBestSummary 
         detail={allFailed
           ? `The practice classification endpoints did not answer: ${failedNote}. No session result is inferred.`
           : `The API publishes no practice best laps for this race weekend.${reasons.length ? ` API reason: ${reasons.join(" ")}` : ""}${failedNote ? ` ${failedNote}.` : ""} No session result is inferred.`}
-        source={sources.join(" · ") || null}
+        source={sources.map((source) => source.replace(/^GET /, "")).join(" · ") || null}
       />
     );
   }
   return (
     <div>
       {(failedNote || unpublished.length > 0) && (
-        <p className={`mb-3 font-mono text-[11px] uppercase tracking-[0.06em] ${failedNote ? "text-amber-400" : "text-white/[0.66]"}`} data-practice-coverage>
+        <p className={`mb-3 text-[13px] ${failedNote ? "text-amber-400" : "text-white/[0.72]"}`} data-practice-coverage>
           {failedNote ? `Partial: ${failedNote}. ` : ""}
           {unpublished.length > 0 ? `${unpublished.map((item) => item.session).join(", ")} not published` : ""}
-          {reasons.length ? <span className="normal-case tracking-normal"> · API reason: {reasons.join(" ")}</span> : null}
+          {reasons.length ? <span> · API reason: {reasons.join(" ")}</span> : null}
         </p>
       )}
       <div className="overflow-x-auto" tabIndex={0} aria-label="Practice best laps">
         <table className="w-full min-w-[560px] border-collapse text-left">
           <thead>
-            <tr className="border-b border-white/[0.06] font-mono text-[11px] uppercase tracking-[0.1em] text-white/[0.66]">
-              <th scope="col" className="py-3 pr-4">Session</th>
-              <th scope="col" className="px-3 py-3">Pos.</th>
-              <th scope="col" className="px-3 py-3">Driver</th>
-              <th scope="col" className="px-3 py-3">Best lap</th>
-              <th scope="col" className="px-3 py-3">Gap</th>
+            <tr className={tableHead}>
+              <th scope="col" className="py-2 pr-4">Session</th>
+              <th scope="col" className="px-3 py-2">Pos.</th>
+              <th scope="col" className="px-3 py-2">Driver</th>
+              <th scope="col" className="px-3 py-2">Best lap</th>
+              <th scope="col" className="px-3 py-2">Gap</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={`${row.session}-${row.driverCode || row.driver}`} className="border-b border-white/[0.04]">
-                <td className="py-3 pr-4 font-mono text-[12px] text-teal">{row.session}</td>
-                <td className="px-3 py-3 font-mono text-[12px] tabular-nums text-white/[0.66]">{row.rank ?? "Not published"}</td>
-                <td className="px-3 py-3 text-body-sm text-white/[0.84]">{row.driver}</td>
-                <td className="px-3 py-3 font-mono text-[12px] tabular-nums text-white/[0.84]">{formatLapMs(row.bestMs)}</td>
-                <td className="px-3 py-3 font-mono text-[12px] tabular-nums text-white/[0.66]">{row.gapMs === 0 ? "Fastest" : `+${(row.gapMs / 1000).toFixed(3)}s`}</td>
+                <td className="py-2 pr-4 font-mono text-[13px] text-light">{row.session}</td>
+                <td className={tableCell}>{row.rank ?? "Not published"}</td>
+                <td className="px-3 py-2 text-[14px] text-white/[0.86]">{row.driver}</td>
+                <td className={tableCell}>{formatLapMs(row.bestMs)}</td>
+                <td className={tableCell}>{row.gapMs === 0 ? "Fastest" : `+${(row.gapMs / 1000).toFixed(3)}s`}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.06em] text-white/[0.62]">Each driver&apos;s fastest timed lap per session, computed by the API over every lap (out-laps excluded). Non-official OpenF1 enrichment.</p>
+      <p className="mt-2 text-[12px] text-white/[0.62]">Each driver&apos;s fastest timed lap per session, computed by the API over every lap (out-laps excluded). Non-official OpenF1 enrichment.</p>
     </div>
   );
-}
-
-function Control({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="block"><span className="mb-2 block font-mono text-[11px] uppercase tracking-[0.12em] text-white/[0.70]">{label}</span>{children}</label>;
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return <div><p className="font-mono text-[10px] uppercase tracking-[0.1em] text-white/[0.60]">{label}</p><p className="mt-1 font-mono text-[12px] text-white/[0.86]">{value}</p></div>;
-}
-
-function CoverageRow({ label, value, ready }: { label: string; value: string; ready: boolean }) {
-  return <div className="flex items-center justify-between gap-3"><span className="text-body-sm text-white/[0.60]">{label}</span><span className={`font-mono text-[10px] uppercase tracking-[0.07em] ${ready ? "text-teal" : "text-amber-400"}`}>{value}</span></div>;
-}
-
-function EmptyState({ title, detail, tone = "neutral" }: { title: string; detail: string; tone?: "neutral" | "amber" }) {
-  return <div className="flex min-h-[350px] flex-col items-center justify-center px-5 text-center"><span className={`mb-4 h-2 w-2 rounded-full ${tone === "amber" ? "bg-amber-400" : "bg-white/[0.30]"}`} /><h3 className="font-serif text-h3 text-light">{title}</h3><p className="mt-3 max-w-md text-body-sm leading-relaxed text-white/[0.60]">{detail}</p></div>;
-}
-
-function SessionEmpty({ title, detail }: { title: string; detail: string }) {
-  return <div className="rounded-lg border border-amber-400/20 bg-amber-400/[0.04] px-4 py-5"><p className="font-mono text-[11px] uppercase tracking-[0.1em] text-amber-400">{title}</p><p className="mt-2 text-body-sm leading-relaxed text-white/[0.60]">{detail}</p></div>;
 }

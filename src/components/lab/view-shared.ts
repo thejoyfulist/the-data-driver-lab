@@ -68,5 +68,5 @@ export function shortLapTime(ms: number): string {
   return minutes ? `${minutes}:${(seconds - minutes * 60).toFixed(1).padStart(4, "0")}` : `${seconds.toFixed(1)}s`;
 }
 
-export const tableHead = "border-b border-white/[0.08] font-mono text-[11px] uppercase tracking-[0.08em] text-white/[0.66]";
+export const tableHead = "border-b border-white/[0.08] text-[12px] font-medium text-white/[0.70]";
 export const tableCell = "px-3 py-2 font-mono text-[12px] tabular-nums text-white/[0.84]";

@@ -10,8 +10,10 @@ import {
   normalizeChatPayload,
   transitionInitialSeasonRestore,
 } from "../src/lib/lab-grounded-queries.mjs";
+import { LAB_VIEWS } from "../src/lib/lab-workspace.mjs";
 
 const labPageSource = readFileSync(new URL("../src/app/LabPageClient.tsx", import.meta.url), "utf8");
+const viewCardSource = readFileSync(new URL("../src/components/lab/ViewCard.tsx", import.meta.url), "utf8");
 const labServerSource = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
 // The browser fetch helper (and its envelope handling) lives in lab-client.ts.
 const labClientSource = readFileSync(new URL("../src/lib/lab-client.ts", import.meta.url), "utf8");
@@ -213,20 +215,19 @@ test("rejects an empty 200 chat payload and routes internal citations through th
   assert.equal(apiSourceHref("/\\\\evil.test/source", "https://thedatadriver.app", "/"), null);
 });
 
-test("renders the selected-driver head-to-head immediately after the field overview", () => {
+test("orders the workspace views from season to race, comparison and questions", () => {
   assert.match(
     labPageSource,
     /const selectedComparisonRows = useMemo\(\s*\(\) => buildRows\(standings, results, predictions\)\.filter\(\(row\) => selectedDrivers\.includes\(row\.id\)\),\s*\[predictions, results, selectedDrivers, standings\],\s*\);/,
   );
   assert.match(labPageSource, /const driverHeadToHead = useMemo\(\s*\(\) => buildDriverHeadToHead\(selectedComparisonRows\),/);
-  const comparisonIndex = labPageSource.indexOf('aria-label="Driver head-to-head"');
-  const sessionIndex = labPageSource.indexOf('aria-label="Session explorer"');
-  const seasonHistoryIndex = labPageSource.indexOf('aria-label="Season comparison"');
-  const dataExplorerIndex = labPageSource.indexOf('aria-label="Data explorer"');
-  assert.ok(comparisonIndex > 0, "head-to-head section is missing");
-  assert.ok(comparisonIndex < sessionIndex, "head-to-head must follow the field before session detail");
-  assert.ok(sessionIndex < seasonHistoryIndex, "session evidence must precede historical comparison");
-  assert.ok(seasonHistoryIndex < dataExplorerIndex, "raw rows must remain the final drill-down");
+  // One view at a time: the registry fixes the order of the navigation.
+  const order = LAB_VIEWS.map((view) => view.id);
+  assert.ok(order.indexOf("field") < order.indexOf("report"), "season views come first");
+  assert.ok(order.indexOf("sessions") < order.indexOf("h2h"), "session evidence precedes comparisons");
+  assert.ok(order.indexOf("h2h") < order.indexOf("seasons"), "head-to-head precedes historical comparison");
+  assert.equal(order.at(-1), "ask");
+  for (const id of ["field", "h2h", "sessions", "seasons", "ask"]) assert.match(labPageSource, new RegExp(`case "${id}":`));
   assert.match(labPageSource, /Championship/);
   assert.match(labPageSource, /Win chance/);
   assert.match(labPageSource, /text-amber-400/);
@@ -250,10 +251,10 @@ test("keeps rejected historical standings distinct from a verified empty season"
   assert.match(labPageSource, /seasonLoadErrors/);
   assert.match(labPageSource, /entry\.status !== "fulfilled"/);
   assert.match(labPageSource, /unavailable: seasonLoadErrors\[year\] === true/);
-  assert.match(labPageSource, /unavailable \? "UNAVAILABLE" : standing\?\.position \?\? "NOT IN SEASON"/);
+  assert.match(labPageSource, /unavailable \? "Unavailable" : standing\?\.position \?\? "Not in season"/);
   const historicalLoadSource = labPageSource.slice(
     labPageSource.indexOf("Promise.allSettled(missingSeasons.map"),
-    labPageSource.indexOf("}, [initialSeason, season, seasonStandings, seasonTimestamps])"),
+    labPageSource.indexOf("}, [initialSeason, season, seasonStandings, seasonTimestamps, view])"),
   );
   assert.doesNotMatch(historicalLoadSource, /entry\.status === "fulfilled"[\s\S]*?: \[\]/);
 });
@@ -439,8 +440,11 @@ test("Lab preserves and renders OpenF1 attribution metadata", () => {
   assert.match(labClientSource, /meta:\s*payload\?\.meta\s*\?\?\s*null/);
   assert.match(labPageSource, /import \{[^}]*\bfetchLab\b[^}]*\} from "@\/lib\/lab-client"/);
   assert.match(labPageSource, /setSessionSourceMeta\(practiceWithMeta\?\.meta \?\? null\)/);
-  assert.match(labPageSource, /sessionSourceMeta\.license_url/);
-  assert.match(labPageSource, /sessionSourceMeta\.adaptation_notice/);
+  // The sessions view hands its OpenF1 envelope to the shared source line,
+  // which prints the licence link and the adaptation notice.
+  assert.match(labPageSource, /source=\{sessionSourceMeta \?\? /);
+  assert.match(viewCardSource, /source\?\.license_url/);
+  assert.match(viewCardSource, /source\.adaptation_notice/);
   assert.doesNotMatch(labPageSource, />Live API ·/);
 });
 
@@ -660,7 +664,8 @@ test("hydrates a URL season before validating its round and circuit", () => {
     hydrationSource,
     /if \(AVAILABLE_SEASONS\.includes\(urlSeason\) && urlSeason !== seasonRef\.current\) \{\s*changeSeason\(urlSeason\);\s*return;\s*\}/,
   );
-  assert.match(hydrationSource, /if \(circuitRace\) changeRound\(circuitRace\.round\);/);
+  // A legacy ?circuit= link selects its race unless the URL names a valid round.
+  assert.match(hydrationSource, /if \(circuitRace && !calendar\.some\(\(race\) => race\.round === urlRound\)\) changeRound\(circuitRace\.round\);/);
 });
 
 test("does not treat a loading flag race as proof that the target calendar is ready", () => {

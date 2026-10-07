@@ -32,6 +32,7 @@ import { StintTimeline } from "./charts/StintTimeline";
 import { TeamBars } from "./charts/TeamBars";
 import { useLabResource, useLabResources, type LabResource } from "./useLabResource";
 import { NotPublished, ViewCard, ViewSkeleton } from "./ViewCard";
+import { useChartCursor } from "./charts/chart-utils";
 import {
   dashTeammates,
   LAP_THRESHOLD,
@@ -55,6 +56,7 @@ export type { LabDriverRef, LabRaceRef, LabViewContext } from "./view-shared";
 // ── Lap pace ────────────────────────────────────────────────────────────
 
 export function PaceView({ context }: { context: LabViewContext }) {
+  const [, setLapCursor] = useChartCursor("lap");
   const [filtered, setFiltered] = useState(true);
   const drivers = context.selectedDrivers.slice(0, 4);
   const endpoints = context.round == null ? [] : drivers.map((driver) => `/v1/f1/races/${context.season}/${context.round}/laps/${driver.id}`);
@@ -64,6 +66,7 @@ export function PaceView({ context }: { context: LabViewContext }) {
   // pit in/out laps and laps run behind the safety car or under VSC.
   const pitStops = useLabResource<LabPitStop[]>(base && `${base}/pitstops`);
   const safetyCars = useLabResource<LabSafetyCar[]>(base && `${base}/safety-cars`);
+  const incidents = useLabResource<LabIncident[]>(base && `${base}/incidents`);
   const loading = endpoints.some((endpoint) => resources[endpoint]?.status === "loading");
   const raceLaps = Math.max(0, ...context.results.map((result) => (isFiniteNumber(result.laps) ? result.laps : 0)));
   const neutralised = new Set(
@@ -112,7 +115,6 @@ export function PaceView({ context }: { context: LabViewContext }) {
   return (
     <ViewCard
       id="lab-pace"
-      index="03 / Race pace"
       title="Lap-by-lap pace"
       scope={scopeLine([
         context.raceLabel ?? `${context.season}`,
@@ -128,7 +130,7 @@ export function PaceView({ context }: { context: LabViewContext }) {
           type="button"
           aria-pressed={filtered}
           onClick={() => setFiltered((value) => !value)}
-          className="inline-flex min-h-9 items-center rounded-md border border-white/[0.10] px-2.5 font-mono text-[11px] uppercase tracking-[0.08em] text-white/[0.72] hover:text-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70"
+          className="inline-flex min-h-11 items-center rounded-md border border-white/[0.10] px-3 text-[13px] lg:min-h-9 text-white/[0.78] hover:border-white/[0.22] hover:text-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70"
         >
           {filtered ? "Show all laps" : "Hide slow laps"}
         </button>
@@ -162,21 +164,40 @@ export function PaceView({ context }: { context: LabViewContext }) {
             formatY={shortLapTime}
             formatValue={formatLapMs}
             missingLabel={filtered ? "excluded" : "not timed"}
+            syncGroup="lap"
           />
+          {raceLaps > 0 && (
+            <div className="mt-4 border-t border-white/[0.06] pt-4" onPointerLeave={() => setLapCursor(null)} data-pace-strip>
+              <p className="mb-2 text-[13px] text-white/[0.70]">Same lap axis: neutralisations, pit stops and incidents. The cursor follows the chart.</p>
+              <RaceTimeline
+                raceLaps={raceLaps}
+                bands={buildNeutralisationBands(asArray<LabSafetyCar>(safetyCars.data), raceLaps)}
+                incidents={buildTimelineIncidents(asArray<LabIncident>(incidents.data).filter((incident) => incident.type !== "safety_car"))}
+                pitDensity={pitStopsPerLap(asArray<LabPitStop>(pitStops.data), raceLaps)}
+                unavailable={{
+                  neutralised: timelineRowState(safetyCars, "Safety cars", "/safety-cars"),
+                  incidents: timelineRowState(incidents, "Incidents", "/incidents"),
+                  pits: timelineRowState(pitStops, "Pit stops", "/pitstops"),
+                }}
+                syncGroup="lap"
+                compact
+              />
+            </div>
+          )}
           <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {withData.map(({ driver, pace }) => (
               <div key={driver.id} className="rounded-md border border-white/[0.06] px-3 py-2">
-                <dt className="font-mono text-[11px] uppercase" style={{ color: readableTeamColor(driver.team) }}>{driver.code}</dt>
-                <dd className="mt-1 font-mono text-[12px] tabular-nums text-light">best {formatLapMs(pace.bestMs)}</dd>
-                <dd className="font-mono text-[11px] tabular-nums text-white/[0.66]">{filtered ? "green-flag median" : "median, all laps"} {formatLapMs(pace.medianMs)}</dd>
+                <dt className="font-mono text-[12px]" style={{ color: readableTeamColor(driver.team) }}>{driver.code}</dt>
+                <dd className="mt-1 text-[13px] text-white/[0.70]">Best <span className="font-mono tabular-nums text-light">{formatLapMs(pace.bestMs)}</span></dd>
+                <dd className="text-[13px] text-white/[0.70]">{filtered ? "Green-flag median" : "Median, all laps"} <span className="font-mono tabular-nums text-white/[0.84]">{formatLapMs(pace.medianMs)}</span></dd>
               </div>
             ))}
           </dl>
           {missing.length > 0 && (
-            <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.06em] text-ambre">
+            <p className="mt-3 text-[13px] text-ambre">
               {failed.length ? `Lap times unavailable (request failed) for ${failed.join(", ")}. ` : ""}
               {missing.length > failed.length ? `No lap times published for ${missing.filter((code) => !failed.includes(code)).join(", ")}.` : ""}
-              {missingReasons.length ? <span className="normal-case tracking-normal"> API reason: {missingReasons.join(" ")}</span> : null}
+              {missingReasons.length ? <span> API reason: {missingReasons.join(" ")}</span> : null}
             </p>
           )}
         </>
@@ -187,7 +208,7 @@ export function PaceView({ context }: { context: LabViewContext }) {
 
 // ── Strategy ────────────────────────────────────────────────────────────
 
-export function StrategyView({ context }: { context: LabViewContext }) {
+export function StrategyView({ context, variant }: { context: LabViewContext; variant?: "view" | "card" }) {
   const endpoint = context.round == null ? null : `/v1/f1/races/${context.season}/${context.round}/pitstops`;
   const resource = useLabResource<LabPitStop[]>(endpoint);
   const stops = asArray<LabPitStop>(resource.data);
@@ -210,7 +231,7 @@ export function StrategyView({ context }: { context: LabViewContext }) {
   return (
     <ViewCard
       id="lab-strategy"
-      index="04 / Strategy"
+      variant={variant}
       title="Pit stops and stints"
       scope={scopeLine([context.raceLabel ?? `${context.season}`, `${stops.length} stops`, `${rows.length} drivers`, "ordered by finishing position"])}
       endpoints={endpoint ? [endpoint] : []}
@@ -225,7 +246,7 @@ export function StrategyView({ context }: { context: LabViewContext }) {
             <tbody>
               {stops.map((stop, index) => (
                 <tr key={`${stop.driver_code}-${stop.stop}-${index}`} className="border-b border-white/[0.04]">
-                  <th scope="row" className="px-3 py-2 text-left font-mono text-[12px] font-normal text-white/[0.84]">{stop.driver_code} <span className="text-white/[0.66]">{stop.first_name} {stop.last_name}</span></th>
+                  <th scope="row" className="px-3 py-2 text-left text-[13px] font-normal text-white/[0.84]"><span className="font-mono text-[12px]">{stop.driver_code}</span> <span className="text-white/[0.70]">{stop.first_name} {stop.last_name}</span></th>
                   <td className={tableCell}>{stop.stop ?? "Not published"}</td>
                   <td className={tableCell}>{stop.lap ?? "Not published"}</td>
                   <td className={tableCell}>{formatLapMs(stop.duration_ms)}</td>
@@ -253,7 +274,7 @@ export function StrategyView({ context }: { context: LabViewContext }) {
 
 // ── Fastest laps ────────────────────────────────────────────────────────
 
-export function FastestLapsView({ context }: { context: LabViewContext }) {
+export function FastestLapsView({ context, variant, limit, onShowAll }: { context: LabViewContext; variant?: "view" | "card"; limit?: number; onShowAll?: () => void }) {
   const endpoint = context.round == null ? null : `/v1/f1/races/${context.season}/${context.round}/fastest-laps`;
   const resource = useLabResource<LabFastestLaps>(endpoint);
   // Gaps come from the published times when `gap_ms` is missing: an absent
@@ -273,7 +294,7 @@ export function FastestLapsView({ context }: { context: LabViewContext }) {
       textColor: readableTeamColor(team),
       value: lap.gapMs,
       display: lap.time_formatted ?? formatLapMs(lap.time_ms),
-      note: lap.gapMs === 0 ? `lap ${lap.lap ?? "?"}` : `+${(lap.gapMs / 1000).toFixed(3)}s${lap.gapComputed ? " (from times)" : ""}`,
+      note: lap.gapMs === 0 ? `lap ${lap.lap ?? "—"}` : `+${(lap.gapMs / 1000).toFixed(3)}${variant === "card" ? "" : "s"}${lap.gapComputed ? " (from times)" : ""}`,
       selected: selected.size ? selected.has((lap.driver_code ?? "").toUpperCase()) : undefined,
     };
   });
@@ -282,9 +303,9 @@ export function FastestLapsView({ context }: { context: LabViewContext }) {
   return (
     <ViewCard
       id="lab-fastest"
-      index="05 / Fastest laps"
+      variant={variant}
       title="Fastest lap per driver"
-      scope={scopeLine([context.raceLabel ?? `${context.season}`, `${laps.length} drivers`, "bar = gap to the fastest lap"])}
+      scope={scopeLine([variant === "card" ? null : context.raceLabel ?? `${context.season}`, limit && laps.length > limit ? `top ${limit} of ${laps.length} drivers` : `${laps.length} drivers`, "bar = gap to the fastest lap"])}
       endpoints={endpoint ? [endpoint] : []}
       source={resource.payload?.meta}
       exportRows={exportRows}
@@ -300,7 +321,14 @@ export function FastestLapsView({ context }: { context: LabViewContext }) {
       ) : rows.length === 0 ? (
         <NotPublished detail={unavailableDetail(resource.data, "The API has no timed laps for this race.")} source="/fastest-laps" />
       ) : (
-        <TeamBars rows={rows} />
+        <>
+          <TeamBars rows={limit ? rows.slice(0, limit) : rows} compact={variant === "card"} />
+          {limit && rows.length > limit && onShowAll && (
+            <button type="button" onClick={onShowAll} className="mt-3 inline-flex min-h-11 items-center text-[13px] lg:min-h-9 text-white/[0.78] underline-offset-4 hover:text-light hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70">
+              All {rows.length} drivers →
+            </button>
+          )}
+        </>
       )}
     </ViewCard>
   );
@@ -326,7 +354,7 @@ function weatherSnapshot(data: unknown): LabWeather | null {
   return data && typeof data === "object" ? (data as LabWeather) : null;
 }
 
-export function RaceTimelineView({ context }: { context: LabViewContext }) {
+export function RaceTimelineView({ context, variant }: { context: LabViewContext; variant?: "view" | "card" }) {
   const base = context.round == null ? null : `/v1/f1/races/${context.season}/${context.round}`;
   const safetyCars = useLabResource<LabSafetyCar[]>(base && `${base}/safety-cars`);
   const incidents = useLabResource<LabIncident[]>(base && `${base}/incidents`);
@@ -344,6 +372,9 @@ export function RaceTimelineView({ context }: { context: LabViewContext }) {
     pits: timelineRowState(pitStops, "Pit stops", "/pitstops"),
   };
   const weatherState = timelineRowState(weather, "Weather", "/weather");
+  const retirements = events
+    .filter((event) => /dnf|retire/i.test(event.kind))
+    .map((event) => `${event.label.split(" · ").slice(1).join(" · ") || "Driver not published"}${event.lap != null ? ` (lap ${event.lap})` : " (lap not published)"}`);
   const allFailed = [safetyCars, incidents, pitStops, weather].every((resource) => resource.status === "error");
   const exportRows = [
     ...bands.map((band) => ({ season: context.season, race: context.raceLabel, kind: band.type, start_lap: band.start, end_lap: band.endPublished ? band.end : null, detail: band.endPublished ? null : "end lap not published" })),
@@ -362,10 +393,10 @@ export function RaceTimelineView({ context }: { context: LabViewContext }) {
   return (
     <ViewCard
       id="lab-timeline"
-      index="06 / Race timeline"
-      title="Safety cars, incidents and conditions"
+      variant={variant}
+      title={variant === "card" ? "Safety cars, retirements and conditions" : "Safety cars, incidents and conditions"}
       scope={scopeLine([
-        context.raceLabel ?? `${context.season}`,
+        variant === "card" ? null : context.raceLabel ?? `${context.season}`,
         raceLaps ? `${raceLaps} laps` : null,
         rowStates.neutralised ? "neutralisations unavailable" : `${bands.length} neutralisations`,
         rowStates.incidents ? "incidents unavailable" : `${events.length} incidents`,
@@ -374,7 +405,7 @@ export function RaceTimelineView({ context }: { context: LabViewContext }) {
       source={safetyCars.payload?.meta ?? weather.payload?.meta}
       exportRows={exportRows}
       exportName={exportBasename("race-timeline", context.season, context.roundSlug)}
-      footnote="Safety-car, incident and weather rows are non-official OpenF1 enrichment (CC BY-NC-SA 4.0). A missing end lap is shown as such, never extended."
+      footnote={variant === "card" ? undefined : "Safety-car, incident and weather rows are non-official OpenF1 enrichment (CC BY-NC-SA 4.0). A missing end lap is shown as such, never extended."}
     >
       {base == null ? (
         <NotPublished title="No race selected" detail="Choose a race to see its timeline." />
@@ -384,21 +415,27 @@ export function RaceTimelineView({ context }: { context: LabViewContext }) {
         <NotPublished title="Race timeline unavailable" detail="None of the safety-car, incident, pit-stop and weather endpoints answered for this race. Nothing is inferred." source="/safety-cars · /incidents · /pitstops · /weather" tone="amber" />
       ) : (
         <div className="space-y-5">
-          <div className="flex flex-wrap gap-2" aria-label="Weather at the race">
+          {variant === "card" && (
+            <p className="text-[13px] text-white/[0.70]" data-retirements>
+              Retirements ·{" "}
+              {rowStates.incidents ? <span className="text-ambre">not available</span> : retirements.length ? <span className="text-white/[0.86]">{retirements.join(" · ")}</span> : "none published"}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-x-4 gap-y-1" role="group" aria-label="Weather at the race">
             {weatherState ? (
-              <span className={`rounded-md border px-3 py-2 font-mono text-[11px] uppercase tracking-[0.06em] ${weather.status === "error" ? "border-ambre/30 text-ambre" : "border-white/[0.08] text-white/[0.66]"}`}>{weatherState}</span>
+              <span className={`text-[13px] ${weather.status === "error" ? "text-ambre" : "text-white/[0.70]"}`}>{weatherState}</span>
             ) : weatherItems.length === 0 ? (
-              <span className="rounded-md border border-white/[0.08] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.06em] text-white/[0.66]">Weather · not published for this session</span>
+              <span className="text-[13px] text-white/[0.70]">Weather · not published for this session</span>
             ) : (
               weatherItems.map(([label, value]) => (
-                <span key={label} className="rounded-md border border-white/[0.08] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.06em] text-white/[0.66]">
-                  {label} <span className="ml-1 text-light normal-case">{value ?? "not published"}</span>
+                <span key={label} className="text-[13px] text-white/[0.70]">
+                  {label} <span className="ml-1 font-mono text-[13px] text-light">{value ?? "not published"}</span>
                 </span>
               ))
             )}
           </div>
           {raceLaps > 0 ? (
-            <RaceTimeline raceLaps={raceLaps} bands={bands} incidents={events} pitDensity={density} unavailable={rowStates} />
+            <RaceTimeline raceLaps={raceLaps} bands={bands} incidents={events} pitDensity={density} unavailable={rowStates} syncGroup="lap" compact={variant === "card"} />
           ) : (
             <NotPublished detail="The race distance is unknown until results are published, so no lap axis is drawn." source="race results" />
           )}

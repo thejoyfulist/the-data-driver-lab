@@ -5,27 +5,28 @@ import { API_DOCS_URL } from "@/lib/site";
 import { ViewSkeleton } from "./ViewCard";
 
 /**
- * Card shell shown in place of a view that loads in the browser: before it
- * scrolls near the viewport, while its code downloads, and on the
- * no-JavaScript page (where the skeleton is hidden and a note explains it).
- * It keeps the view's anchor id, so the view navigation and ⌘K still land.
+ * Shell shown in place of a view that loads in the browser: while its code
+ * or data downloads, and on the no-JavaScript page (where the skeleton is
+ * hidden and a note explains it). It keeps the view's anchor id and title.
  */
-export function ViewPlaceholder({ id, index, title }: { id: string; index: string; title: string }) {
+export function ViewPlaceholder({ id, title, variant = "view" }: { id: string; title: string; variant?: "view" | "card" }) {
+  const card = variant === "card";
   return (
     <section
       id={id}
       aria-label={title}
       data-view-placeholder
-      className="min-w-0 scroll-mt-28 rounded-xl border border-white/[0.08] bg-white/[0.018]"
+      className={`min-w-0 scroll-mt-32 ${card ? "rounded-xl border border-white/[0.08] bg-white/[0.018] p-4 md:p-5" : ""}`}
     >
-      <header className="border-b border-white/[0.06] px-4 py-4 md:px-6">
-        <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-white/[0.62]">{index}</p>
-        <h2 className="mt-1 font-serif text-h3 text-light">{title}</h2>
-      </header>
-      <div className="px-4 py-5 md:px-6">
+      {card ? (
+        <h2 className="font-serif text-[19px] leading-6 text-light">{title}</h2>
+      ) : (
+        <h1 className="font-serif text-[26px] leading-8 tracking-[-0.02em] text-light md:text-[30px] md:leading-9">{title}</h1>
+      )}
+      <div className={card ? "mt-4" : "mt-5 rounded-xl border border-white/[0.08] bg-white/[0.018] p-4 md:p-5"}>
         <ViewSkeleton label={`Loading ${title}`} rows={6} />
         <noscript>
-          <p className="text-body-sm leading-relaxed text-white/[0.66]">
+          <p className="text-[14px] leading-relaxed text-white/[0.70]">
             This view is drawn in the browser. Without JavaScript, the same data is published by the public API: see the{" "}
             <a href={API_DOCS_URL} className="text-light underline underline-offset-2">API documentation</a>.
           </p>

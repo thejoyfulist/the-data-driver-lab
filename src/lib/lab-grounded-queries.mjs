@@ -99,6 +99,18 @@ export function buildDriverHeadToHead(selectedRows) {
 }
 
 /**
+ * Grid-to-finish gains, best first. The single rule shared by the "Who gained
+ * the most" answer and the race report: classified rows with a published grid
+ * slot (> 0, so pit-lane starts are left out) and a finishing position.
+ */
+export function rankPositionGains(results) {
+  return (Array.isArray(results) ? results : [])
+    .filter((result) => result.grid > 0 && result.position > 0)
+    .map((result) => ({ ...result, gained: result.grid - result.position }))
+    .sort((left, right) => right.gained - left.gained);
+}
+
+/**
  * Visible label for the selected race. `context.round` is the internal API key
  * (it still counts cancelled rounds); callers pass `roundLabel` with the
  * official formula1.com round ("R15") or the race name when it is unknown.
@@ -190,10 +202,7 @@ export function buildStarterAnswer(question, context) {
 
   if (question !== STARTER_QUESTIONS.POSITION_GAIN) return null;
 
-  const gainers = context.results
-    .filter((result) => result.grid > 0 && result.position > 0)
-    .map((result) => ({ ...result, gained: result.grid - result.position }))
-    .sort((left, right) => right.gained - left.gained);
+  const gainers = rankPositionGains(context.results);
   const best = gainers[0];
   if (!best) {
     return {

@@ -29,7 +29,7 @@ type RunState = "idle" | "running" | "done" | "error";
 const KEY_FORGOTTEN = "key-forgotten";
 
 const buttonClass =
-  "min-h-11 rounded-lg px-4 py-3 font-mono text-[11px] uppercase tracking-[0.1em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 disabled:cursor-not-allowed disabled:opacity-40";
+  "min-h-11 rounded-lg px-4 text-[14px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 disabled:cursor-not-allowed disabled:opacity-40";
 
 /** One-line summary of a tool call's input ("season 2026 · api_round 17"). */
 function describeInput(input: unknown): string {
@@ -186,24 +186,24 @@ export default function AskAiPanel({ season }: { season: number }) {
       <fieldset className="mt-5 grid gap-3 sm:grid-cols-2">
         <legend className="sr-only">AI provider settings</legend>
         <label className="block">
-          <span className="mb-1 block font-mono text-[11px] uppercase tracking-[0.1em] text-white/[0.62]">Provider</span>
+          <span className="mb-1 block text-[13px] text-white/[0.72]">Provider</span>
           <select value={provider} onChange={(event) => chooseProvider(event.target.value as ProviderId)} className="control-select w-full">
             {PROVIDER_IDS.map((id) => <option key={id} value={id}>{PROVIDERS[id].label}</option>)}
           </select>
         </label>
         <label className="block">
-          <span className="mb-1 block font-mono text-[11px] uppercase tracking-[0.1em] text-white/[0.62]">Model</span>
+          <span className="mb-1 block text-[13px] text-white/[0.72]">Model</span>
           <input value={model} onChange={(event) => setModel(event.target.value)} list={modelList} spellCheck={false} autoComplete="off" className="control-input w-full" placeholder="Model name" />
           <datalist id={modelList}>{info.models.map((name) => <option key={name} value={name} />)}</datalist>
         </label>
         {info.editableBaseURL && (
           <label className="block sm:col-span-2">
-            <span className="mb-1 block font-mono text-[11px] uppercase tracking-[0.1em] text-white/[0.62]">Endpoint URL</span>
+            <span className="mb-1 block text-[13px] text-white/[0.72]">Endpoint URL</span>
             <input value={baseURL} onChange={(event) => setBaseURL(event.target.value)} spellCheck={false} autoComplete="off" inputMode="url" className="control-input w-full" placeholder={info.baseURL || "https://…/v1"} />
           </label>
         )}
         <div className="sm:col-span-2">
-          <label htmlFor={keyField} className="mb-1 block font-mono text-[11px] uppercase tracking-[0.1em] text-white/[0.62]">
+          <label htmlFor={keyField} className="mb-1 block text-[13px] text-white/[0.72]">
             API key{info.keyRequired ? "" : " (optional)"}
           </label>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -231,7 +231,7 @@ export default function AskAiPanel({ season }: { season: number }) {
 
       {(state !== "idle" || answer) && (
         <div className="mt-5 border-t border-teal/15 pt-5" aria-busy={state === "running"}>
-          <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-white/[0.62]">
+          <p className="text-[13px] font-medium text-white/[0.78]">
             {info.label} · {model} · at most {MAX_TOOL_STEPS} tool steps
           </p>
           <div data-testid="ai-answer" className="mt-3 whitespace-pre-wrap text-body leading-relaxed text-white/[0.84]">
@@ -239,11 +239,11 @@ export default function AskAiPanel({ season }: { season: number }) {
           </div>
           {sources.length > 0 && (
             <div className="mt-4">
-              <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-white/[0.62]">Sources read</p>
+              <p className="text-[13px] font-medium text-white/[0.78]">Sources read</p>
               <ul data-testid="ai-sources" className="mt-2 flex flex-wrap gap-2">
                 {sources.map((source) => (
                   <li key={source.api_url}>
-                    <a href={source.api_url} target="_blank" rel="noopener noreferrer" className="inline-block rounded-full border border-white/[0.10] px-3 py-1.5 font-mono text-[10px] text-white/[0.66] hover:border-teal/30 hover:text-teal">
+                    <a href={source.api_url} target="_blank" rel="noopener noreferrer" className="inline-block rounded-full border border-white/[0.10] px-3 py-1.5 text-[12px] text-white/[0.72] hover:border-teal/30 hover:text-teal">
                       {source.api_url.replace(/^https?:\/\/[^/]+/, "")}
                       {source.kind === "openf1_enrichment" ? ` · OpenF1 ${source.licence ?? "CC BY-NC-SA 4.0"} · non-official` : source.kind === "forecast" ? " · model forecast" : ""}
                     </a>
@@ -254,7 +254,7 @@ export default function AskAiPanel({ season }: { season: number }) {
           )}
           {calls.length > 0 && (
             <details className="mt-4 rounded-lg border border-white/[0.08]" data-testid="ai-tool-calls">
-              <summary className="cursor-pointer px-3 py-2 font-mono text-[11px] uppercase tracking-[0.1em] text-white/[0.70]">
+              <summary className="cursor-pointer px-3 py-2 text-[13px] text-white/[0.78]">
                 {calls.length} tool call{calls.length > 1 ? "s" : ""}
               </summary>
               <ol className="space-y-2 px-3 pb-3">
@@ -264,7 +264,7 @@ export default function AskAiPanel({ season }: { season: number }) {
                       <summary className="cursor-pointer text-body-sm text-white/[0.76]">
                         <span className="font-mono text-teal">{call.tool}</span> <span className="text-white/[0.62]">{describeInput(call.input)}</span> — {describeOutcome(call)}
                       </summary>
-                      <pre className="mt-2 max-h-64 overflow-auto rounded bg-black/30 p-2 font-mono text-[11px] text-white/[0.70]" tabIndex={0}>
+                      <pre className="mt-2 max-h-64 overflow-auto rounded bg-black/30 p-2 font-mono text-[12px] text-white/[0.72]" tabIndex={0}>
                         {JSON.stringify(call.output ?? { error: call.failed ?? "pending" }, null, 2).slice(0, 4000)}
                       </pre>
                     </details>

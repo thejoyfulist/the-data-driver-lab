@@ -29,7 +29,7 @@ export function StintTimeline({ rows, maxLap }: { rows: readonly StintRow[]; max
           <span className="flex min-w-0 items-center gap-1.5">
             <span aria-hidden="true" className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: row.color }} />
             <span className="font-mono text-[12px] tabular-nums text-white/[0.62]">{row.finish != null ? `P${row.finish}` : "—"}</span>
-            <span className="truncate font-mono text-[12px] uppercase" style={{ color: row.textColor }}>{row.code}</span>
+            <span className="truncate font-mono text-[12px]" style={{ color: row.textColor }}>{row.code}</span>
           </span>
           <span className="relative h-5 rounded-sm bg-white/[0.03]" aria-label={`${row.name}: ${row.stops.length} ${row.stops.length === 1 ? "stop" : "stops"}${row.stops.length ? ` on lap ${row.stops.map((stop) => stop.lap).join(", ")}` : ""}`} role="img">
             {row.stints.map((stint) => (
@@ -54,16 +54,16 @@ export function StintTimeline({ rows, maxLap }: { rows: readonly StintRow[]; max
               />
             ))}
           </span>
-          <span className="text-right font-mono text-[11px] tabular-nums text-white/[0.66]">
+          <span className="text-right font-mono text-[12px] tabular-nums text-white/[0.66]">
             {row.stops.length} {row.stops.length === 1 ? "stop" : "stops"}
           </span>
         </div>
       ))}
       <div className="grid grid-cols-[4.5rem_minmax(0,1fr)_3.5rem] gap-3 pt-2 sm:grid-cols-[8rem_minmax(0,1fr)_4.5rem]" aria-hidden="true">
-        <span className="font-mono text-[11px] uppercase text-white/[0.62]">Lap</span>
+        <span className="text-[12px] text-white/[0.62]">Lap</span>
         <span className="relative h-4">
           {lapTicks(maxLap).map((lap) => (
-            <span key={lap} className="absolute -translate-x-1/2 font-mono text-[11px] tabular-nums text-white/[0.62]" style={{ left: pct(lap) }}>
+            <span key={lap} className="absolute -translate-x-1/2 font-mono text-[12px] tabular-nums text-white/[0.62]" style={{ left: pct(lap) }}>
               {lap}
             </span>
           ))}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 
 export interface CommandItem {
   id: string;
@@ -90,7 +91,10 @@ export function CommandPalette({ open, onClose, items }: CommandPaletteProps) {
     }
   }
 
-  return (
+  // Rendered at the end of <body>: a transformed ancestor (the page
+  // template's entrance animation) would otherwise anchor this fixed layer
+  // to the top of the page instead of the screen.
+  return createPortal(
     <div className="fixed inset-0 z-[80] flex items-start justify-center bg-black/60 px-4 pt-[12vh]" onMouseDown={onClose}>
       <div
         role="dialog"
@@ -128,7 +132,7 @@ export function CommandPalette({ open, onClose, items }: CommandPaletteProps) {
             return (
               <li key={item.id} role="presentation">
                 {header && (
-                  <p role="presentation" className="px-4 pb-1 pt-3 font-mono text-[11px] uppercase tracking-[0.1em] text-white/[0.62]">{header}</p>
+                  <p role="presentation" className="px-4 pb-1 pt-3 text-[12px] font-medium text-white/[0.66]">{header}</p>
                 )}
                 <div
                   id={`${listId}-${index}`}
@@ -139,13 +143,13 @@ export function CommandPalette({ open, onClose, items }: CommandPaletteProps) {
                   className={`mx-2 flex cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-2 ${index === active ? "bg-white/[0.08] text-light" : "text-white/[0.80]"}`}
                 >
                   <span className="truncate text-body-sm">{item.label}</span>
-                  {item.hint && <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.06em] text-white/[0.62]">{item.hint}</span>}
+                  {item.hint && <span className="shrink-0 text-[12px] text-white/[0.66]">{item.hint}</span>}
                 </div>
               </li>
             );
           })}
         </ul>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-white/[0.08] px-4 py-2.5 font-mono text-[11px] uppercase tracking-[0.06em] text-white/[0.62]">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-white/[0.08] px-4 py-2.5 text-[12px] text-white/[0.66]">
           <span>↑↓ move</span>
           <span>↵ open</span>
           <span>esc close</span>
@@ -153,6 +157,7 @@ export function CommandPalette({ open, onClose, items }: CommandPaletteProps) {
           <span>[ ] previous / next race</span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

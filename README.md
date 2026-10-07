@@ -21,20 +21,31 @@ Unavailable data stays unavailable — nothing is guessed or back-filled.
 
 ## Features
 
-- **Twelve linked views** driven by one set of controls (season, circuit, race, drivers, team):
-  field, championship progression, constructors, lap-by-lap pace, fastest laps, pit stops and stints,
-  safety cars / incidents / weather timeline, driver head-to-head, practice and qualifying sessions,
-  season comparison, grounded questions, and a free data explorer.
-- **Every number has a source.** Each view shows its `GET` request, its provenance (official results or
-  attributed OpenF1 enrichment) and its fetch time. One click copies the request.
-- **Exports**: CSV and JSON for every view.
-- **Shareable state**: the URL carries the season, round and selection.
+- **A workspace, one view at a time**: a compact bar (one race selector, the compared drivers as chips,
+  the session status, `⌘K`, `</> API`, "Share view"), a side navigation grouped by Season (field,
+  championship, constructors), Race (race report, race pace, fastest laps, strategy, race timeline,
+  sessions), Compare (head-to-head, across seasons) and Ask, and an inspector with the values behind the view.
+- **Race report**, the default view once a race is chosen: official name, venue, date and laps, four key
+  figures computed from the API (winner, fastest lap, biggest grid-to-finish gain, neutralisations), then
+  fastest laps, the safety-car / retirements / weather timeline, the championship after the race and its
+  progression.
+- **"What stands out"** in the inspector: sentences computed by fixed rules from the rows on screen (never
+  generated text); when nothing can be computed, it says so.
+- **Charts**: a cursor shared by the charts on the same axis (hover or arrow keys) with a values tooltip,
+  end-of-line labels that never overlap, a clickable legend, dashed lines for teammates, and a values table
+  behind every chart.
+- **Every number has a source.** Each view states its provenance (official results or attributed OpenF1
+  enrichment) and its fetch time on one line. Its "⋯" menu exports CSV or JSON and copies the `GET`
+  request; `</> API` shows the requests of the view on screen.
+- **Shareable state**: the URL carries the view, season, round and selection; Back and Forward move between
+  views.
 - **Keyboard first**: `⌘K` / `Ctrl+K` command palette, `/` to search the field, `[` `]` to step through races.
-- **Works without JavaScript** for the default race: the server renders the main tables; charts are
-  progressive enhancement.
+- **Works without JavaScript** for the default view: the server renders the race report; the other views
+  are drawn in the browser.
 - **Honest empty states**: when an endpoint is unavailable the view says so; it never substitutes a prediction
   for a measured result.
-- **Mobile layout** with compact filters.
+- **Mobile layout**: one selector, views as scrolling pills, the first chart in the first screen and a
+  bottom bar with "Ask the data" and share / export.
 - **Optional AI mode with your own key**: ask questions with a model from Anthropic, OpenAI, OpenRouter,
   Groq, a local Ollama or any OpenAI-compatible endpoint. The model answers from read-only F1 tools and
   shows every tool call and source; the key stays in your browser. See [AI mode](#ai-mode-your-own-key).
@@ -89,9 +100,12 @@ Browser ──► Next.js app (this repository)
 ```
 
 - `src/app/page.tsx` — server entry: calendar, standings, the last completed race and its views' seed.
-- `src/app/LabPageClient.tsx` — controls, URL state, field, sessions, explorer and grounded questions.
-- `src/components/lab/` — the analytical views (`LabViews`, `SeasonViews`), charts (SVG, no chart library),
-  lazy loading, command palette and the shared resource cache (`useLabResource`).
+- `src/app/LabPageClient.tsx` — workspace state (view, race, drivers) in the URL, field, sessions, head-to-head and grounded questions.
+- `src/components/lab/` — the workspace chrome (`LabWorkspace`), race report (`RaceReportView`), inspector
+  (`LabInspector`), the analytical views (`LabViews`, `SeasonViews`), charts (SVG, no chart library), lazy
+  loading, command palette and the shared resource cache (`useLabResource`).
+- `src/lib/lab-workspace.mjs` — the view registry and the session status helpers; `src/lib/lab-insights.mjs` —
+  the race report's key figures and the inspector's sentences, pure and tested.
 - `src/lib/lab-client.ts` — typed, all-optional payload shapes, the browser fetch helper and exports.
 - `src/lib/lab-analytics.ts` — pure functions (green-flag pace filter, stints, championship progression…).
 - `src/lib/proxy-allowlist.mjs` — the read endpoints the proxy forwards; everything else answers 404.

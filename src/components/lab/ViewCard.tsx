@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import {
   copyText,
   describeSource,
@@ -12,10 +12,16 @@ import {
   type LabSourceMeta,
 } from "@/lib/lab-client";
 
+/**
+ * "</> API" in the workspace bar reveals, in every view on screen, the
+ * requests behind it and its exports. Off by default: the mechanics stay one
+ * click away instead of on every card.
+ */
+export const ApiPanelContext = createContext<{ open: boolean; setOpen: (open: boolean) => void }>({ open: false, setOpen: () => {} });
+
 export interface ViewCardProps {
-  /** Anchor id, used by the view navigation and the command palette. */
+  /** Element id of the view (deep links, focus, end-to-end tests). */
   id: string;
-  index: string;
   title: string;
   /** One line stating exactly what is shown: season, round, filter and row count. */
   scope: string;
@@ -28,15 +34,16 @@ export interface ViewCardProps {
   table?: ReactNode;
   actions?: ReactNode;
   footnote?: ReactNode;
+  /** "view": the workspace's single full-width view (h1). "card": a race report card (h2). */
+  variant?: "view" | "card";
   children: ReactNode;
 }
 
-const toolbarButton =
-  "inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/[0.10] px-2.5 font-mono text-[11px] uppercase tracking-[0.08em] text-white/[0.72] transition-colors duration-fast hover:border-white/[0.22] hover:text-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 disabled:cursor-not-allowed disabled:opacity-40";
+const quietButton =
+  "inline-flex min-h-11 lg:min-h-9 items-center gap-1.5 rounded-md border border-white/[0.10] px-3 text-[13px] text-white/[0.78] transition-colors duration-fast hover:border-white/[0.22] hover:text-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 disabled:cursor-not-allowed disabled:opacity-50";
 
 export function ViewCard({
   id,
-  index,
   title,
   scope,
   endpoints,
@@ -46,148 +53,237 @@ export function ViewCard({
   table,
   actions,
   footnote,
+  variant = "view",
   children,
 }: ViewCardProps) {
   const headingId = useId();
   const sectionRef = useRef<HTMLElement>(null);
   const [mode, setMode] = useState<"chart" | "table">("chart");
+  const { open: apiOpen } = useContext(ApiPanelContext);
 
-  // A browser-loaded view replaces its placeholder: if ⌘K or the view
-  // navigation focused the placeholder heading, move focus to the real one.
+  // A browser-loaded view replaces its placeholder: if the view navigation
+  // focused the placeholder heading, move focus to the real one.
   useEffect(() => {
     const holder = sectionRef.current?.closest<HTMLElement>("[data-focus-pending]");
     if (!holder) return;
     holder.removeAttribute("data-focus-pending");
-    const heading = sectionRef.current?.querySelector<HTMLElement>("h2");
+    const heading = sectionRef.current?.querySelector<HTMLElement>("h1, h2");
     heading?.setAttribute("tabindex", "-1");
     heading?.focus({ preventScroll: true });
   }, []);
-  const visibleRequests = endpoints.slice(0, 3).map((endpoint) => `GET ${publicApiUrl(endpoint)}`);
-  const requestText = endpoints.length > 3
-    ? [...visibleRequests, `+ ${endpoints.length - 3} more requests (copied in full)`].join("\n")
-    : visibleRequests.join("\n");
-  const fetchedAt = formatUtcTimestamp(source?.data_fetched_at ?? source?.timestamp ?? null);
+
+  const card = variant === "card";
+  const Heading = card ? "h2" : "h1";
 
   return (
     <section
       ref={sectionRef}
       id={id}
       aria-labelledby={headingId}
-      className="min-w-0 scroll-mt-28 rounded-xl border border-white/[0.08] bg-white/[0.018]"
+      className={`min-w-0 scroll-mt-32 ${card ? "flex flex-col rounded-xl border border-white/[0.08] bg-white/[0.018] p-4 md:p-5" : ""}`}
     >
-      <header className="flex flex-col gap-3 border-b border-white/[0.06] px-4 py-4 md:px-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-white/[0.62]">{index}</p>
-            <h2 id={headingId} className="mt-1 font-serif text-h3 text-light">{title}</h2>
-            <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.08em] text-white/[0.66]" data-view-scope>
-              {scope}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={`${title} actions`}>
-            {actions}
-            {table && (
-              <div className="flex rounded-md border border-white/[0.10] p-0.5" role="group" aria-label="Display">
-                {(["chart", "table"] as const).map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={mode === value}
-                    onClick={() => setMode(value)}
-                    className={`min-h-8 rounded px-2.5 font-mono text-[11px] uppercase tracking-[0.08em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 ${mode === value ? "bg-white/[0.10] text-light" : "text-white/[0.66] hover:text-light"}`}
-                  >
-                    {value}
-                  </button>
-                ))}
-              </div>
-            )}
-            <ViewActions title={title} endpoints={endpoints} exportRows={exportRows} exportName={exportName} bare />
-          </div>
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0 max-w-3xl flex-1">
+          <Heading id={headingId} className={card ? "font-serif text-[19px] leading-6 text-light" : "font-serif text-[26px] leading-8 tracking-[-0.02em] text-light md:text-[30px] md:leading-9"}>
+            {title}
+          </Heading>
+          <p className={`mt-1 ${card ? "text-[13px]" : "text-[14px]"} leading-5 text-white/[0.70]`} data-view-scope>
+            {scope}
+          </p>
         </div>
-        {endpoints.length > 0 && (
-          <pre className="overflow-x-auto whitespace-pre rounded-md border border-white/[0.06] bg-black/30 px-3 py-2 font-mono text-[11px] leading-5 text-white/[0.70]" tabIndex={0} aria-label="API request">
-            {requestText}
-          </pre>
-        )}
+        <div className="flex max-w-[55%] shrink-0 flex-wrap items-center justify-end gap-1.5" role="group" aria-label={`${title} actions`}>
+          {actions}
+          {table && (
+            <div className="flex rounded-md border border-white/[0.10] p-0.5" role="group" aria-label="Display">
+              {(["chart", "table"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={mode === value}
+                  onClick={() => setMode(value)}
+                  className={`min-h-10 rounded px-3 text-[13px] capitalize lg:min-h-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 ${mode === value ? "bg-teal text-dark" : "text-white/[0.72] hover:text-light"}`}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+          )}
+          <ViewMenu title={title} endpoints={endpoints} exportRows={exportRows} exportName={exportName} />
+        </div>
       </header>
-      <div className="px-4 py-5 md:px-6">{mode === "table" && table ? table : children}</div>
-      <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] px-4 py-3 font-mono text-[11px] uppercase tracking-[0.06em] text-white/[0.62] md:px-6">
-        <span>
-          Source · {describeSource(source)}
-          {source?.license_url && source.source?.startsWith("openf1.org") ? (
-            <>
-              {" · "}
-              <a href={source.license_url} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-light">
-                licence
-              </a>
-            </>
-          ) : null}
-        </span>
-        <span>{fetchedAt ? `Fetched ${fetchedAt}` : "Fetch time not published"}</span>
-        {footnote && <span className="w-full normal-case tracking-normal text-caption text-white/[0.62]">{footnote}</span>}
-      </footer>
+      {apiOpen && <ApiPanel title={title} endpoints={endpoints} exportRows={exportRows} exportName={exportName} />}
+      <div className={card ? "mt-4 flex-1" : "mt-5 rounded-xl border border-white/[0.08] bg-white/[0.018] p-4 md:p-5"}>
+        {mode === "table" && table ? table : children}
+      </div>
+      <SourceLine source={source} footnote={footnote} />
     </section>
   );
 }
 
-interface ViewActionsProps {
+/** Source, licence and fetch time of a view, on one discreet line. */
+export function SourceLine({ source, footnote }: { source?: LabSourceMeta | null; footnote?: ReactNode }) {
+  const fetchedAt = formatUtcTimestamp(source?.data_fetched_at ?? source?.timestamp ?? null);
+  return (
+    <footer className="mt-3 space-y-1 text-[12px] leading-5 text-white/[0.62]" data-view-source>
+      <p>
+        Source · {describeSource(source)}
+        {source?.license_url && source.source?.startsWith("openf1.org") ? (
+          <>
+            {" · "}
+            <a href={source.license_url} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-light">licence</a>
+          </>
+        ) : null}
+        {" · "}
+        {fetchedAt ? `fetched ${fetchedAt}` : "fetch time not published"}
+        {source?.adaptation_notice ? ` · ${source.adaptation_notice}` : null}
+      </p>
+      {footnote && <p className="max-w-4xl text-white/[0.66]">{footnote}</p>}
+    </footer>
+  );
+}
+
+export interface ExportProps {
   title: string;
   endpoints: readonly string[];
   exportRows: readonly ExportRow[];
   exportName: string;
-  /** Render the buttons only (inside an existing action group). */
-  bare?: boolean;
 }
 
-/** CSV / JSON export and "Copy API request" for any Lab view. */
-export function ViewActions({ title, endpoints, exportRows, exportName, bare = false }: ViewActionsProps) {
-  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
-  const hasRows = exportRows.length > 0;
+function requestLines(endpoints: readonly string[]): string {
+  const visible = endpoints.slice(0, 3).map((endpoint) => `GET ${publicApiUrl(endpoint)}`);
+  return endpoints.length > 3 ? [...visible, `+ ${endpoints.length - 3} more requests (copied in full)`].join("\n") : visible.join("\n");
+}
 
-  async function copyRequest() {
-    const copied = await copyText(endpoints.map(publicApiUrl).join("\n"));
-    setCopyState(copied ? "copied" : "failed");
-    window.setTimeout(() => setCopyState("idle"), 2_000);
+function useExport({ endpoints, exportRows, exportName }: ExportProps) {
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  return {
+    copyState,
+    hasRows: exportRows.length > 0,
+    csv: () => downloadText(`${exportName}.csv`, toCsv(exportRows), "text/csv"),
+    json: () => downloadText(`${exportName}.json`, `${JSON.stringify(exportRows, null, 2)}\n`, "application/json"),
+    copy: async () => {
+      const copied = await copyText(endpoints.map(publicApiUrl).join("\n"));
+      setCopyState(copied ? "copied" : "failed");
+      window.setTimeout(() => setCopyState("idle"), 2_000);
+    },
+  };
+}
+
+/** Requests behind the view and its exports, shown while "</> API" is on. */
+export function ApiPanel(props: ExportProps) {
+  const { title, endpoints } = props;
+  const actions = useExport(props);
+  return (
+    <div className="mt-3 rounded-lg border border-white/[0.08] bg-black/30 p-3" data-api-panel>
+      {endpoints.length > 0 ? (
+        <pre className="overflow-x-auto whitespace-pre font-mono text-[12px] leading-5 text-white/[0.78]" tabIndex={0} aria-label="API request">
+          {requestLines(endpoints)}
+        </pre>
+      ) : (
+        <p className="text-[13px] text-white/[0.66]">This view makes no API request for the current selection.</p>
+      )}
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <button type="button" className={quietButton} disabled={endpoints.length === 0} aria-label={`Copy API request for ${title}`} onClick={() => void actions.copy()}>
+          {actions.copyState === "copied" ? "Copied" : actions.copyState === "failed" ? "Copy failed" : "Copy request"}
+        </button>
+        <button type="button" className={quietButton} disabled={!actions.hasRows} aria-label={`Export ${title} as CSV`} onClick={actions.csv}>CSV</button>
+        <button type="button" className={quietButton} disabled={!actions.hasRows} aria-label={`Export ${title} as JSON`} onClick={actions.json}>JSON</button>
+        <span className="sr-only" aria-live="polite">{actions.copyState === "copied" ? "API request copied to clipboard" : actions.copyState === "failed" ? "Copy failed" : ""}</span>
+      </div>
+    </div>
+  );
+}
+
+/** "⋯" menu: CSV / JSON export, "Copy API request" and the API panel toggle. */
+export function ViewMenu(props: ExportProps) {
+  const { title, endpoints } = props;
+  const actions = useExport(props);
+  const api = useContext(ApiPanelContext);
+  const [open, setOpen] = useState(false);
+  const menuId = useId();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    menuRef.current?.querySelector<HTMLElement>("[role=menuitem]:not([aria-disabled=true])")?.focus();
+    const close = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node) && !buttonRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  function run(action: () => void | Promise<void>, enabled: boolean) {
+    if (!enabled) return;
+    setOpen(false);
+    buttonRef.current?.focus();
+    void action();
   }
 
-  const buttons = (
-    <>
-      <button
-        type="button"
-        className={toolbarButton}
-        disabled={!hasRows}
-        aria-label={`Export ${title} as CSV`}
-        onClick={() => downloadText(`${exportName}.csv`, toCsv(exportRows), "text/csv")}
-      >
-        CSV
-      </button>
-      <button
-        type="button"
-        className={toolbarButton}
-        disabled={!hasRows}
-        aria-label={`Export ${title} as JSON`}
-        onClick={() => downloadText(`${exportName}.json`, `${JSON.stringify(exportRows, null, 2)}\n`, "application/json")}
-      >
-        JSON
-      </button>
-      <button
-        type="button"
-        className={toolbarButton}
-        disabled={endpoints.length === 0}
-        aria-label={`Copy API request for ${title}`}
-        onClick={() => void copyRequest()}
-      >
-        {copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy API request"}
-      </button>
-      <span className="sr-only" aria-live="polite">
-        {copyState === "copied" ? "API request copied to clipboard" : copyState === "failed" ? "Copy failed" : ""}
-      </span>
-    </>
-  );
-  if (bare) return buttons;
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const items = [...(menuRef.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? [])];
+    const index = items.indexOf(document.activeElement as HTMLElement);
+    if (event.key === "Escape" || event.key === "Tab") {
+      if (event.key === "Escape") event.preventDefault();
+      setOpen(false);
+      buttonRef.current?.focus();
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const next = (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+      items[next]?.focus();
+    } else if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      (event.key === "Home" ? items[0] : items.at(-1))?.focus();
+    }
+  }
+
+  const items: { label: string; enabled: boolean; action: () => void | Promise<void> }[] = [
+    { label: "Download CSV", enabled: actions.hasRows, action: actions.csv },
+    { label: "Download JSON", enabled: actions.hasRows, action: actions.json },
+    { label: actions.copyState === "copied" ? "Request copied" : "Copy API request", enabled: endpoints.length > 0, action: actions.copy },
+    { label: api.open ? "Hide API requests" : "Show API requests", enabled: true, action: () => api.setOpen(!api.open) },
+  ];
+
   return (
-    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={`${title} actions`}>
-      {buttons}
+    <div className="relative">
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-label={`More actions for ${title}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        onClick={() => setOpen((value) => !value)}
+        className={`${quietButton} min-w-11 justify-center px-2 lg:min-w-9`}
+      >
+        <span aria-hidden="true">⋯</span>
+      </button>
+      {open && (
+        <div
+          ref={menuRef}
+          id={menuId}
+          role="menu"
+          aria-label={`${title} actions`}
+          onKeyDown={onKeyDown}
+          className="absolute right-0 top-full z-40 mt-1 w-56 rounded-lg border border-white/[0.12] bg-surface-2 p-1 shadow-glow-depth"
+        >
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              tabIndex={-1}
+              aria-disabled={!item.enabled}
+              onClick={() => run(item.action, item.enabled)}
+              className={`flex min-h-10 w-full items-center rounded-md px-3 text-left text-[14px] focus-visible:outline-none ${item.enabled ? "text-white/[0.84] hover:bg-white/[0.06] focus:bg-white/[0.08]" : "cursor-not-allowed text-white/[0.62]"}`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <span className="sr-only" aria-live="polite">{actions.copyState === "copied" ? "API request copied to clipboard" : actions.copyState === "failed" ? "Copy failed" : ""}</span>
     </div>
   );
 }
@@ -209,7 +305,7 @@ export function ViewSkeleton({ rows = 6, label }: { rows?: number; label: string
   );
 }
 
-/** Explicit, sourced empty state: never a bare dash. */
+/** Compact, sourced empty state: one line and the API's reason, never a bare dash or a large empty card. */
 export function NotPublished({
   title = "Not published for this session",
   detail,
@@ -222,13 +318,11 @@ export function NotPublished({
   tone?: "neutral" | "amber";
 }) {
   return (
-    <div
-      className={`rounded-lg border px-4 py-5 ${tone === "amber" ? "border-ambre/30 bg-ambre/[0.05]" : "border-white/[0.08] bg-white/[0.02]"}`}
-      data-empty-state
-    >
-      <p className={`font-mono text-[11px] uppercase tracking-[0.1em] ${tone === "amber" ? "text-ambre" : "text-white/[0.80]"}`}>{title}</p>
-      <p className="mt-2 max-w-2xl text-body-sm leading-relaxed text-white/[0.66]">{detail}</p>
-      {source && <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.08em] text-white/[0.62]">Checked source · {source}</p>}
-    </div>
+    <p className="text-[14px] leading-6" data-empty-state>
+      <span aria-hidden="true" className={`mr-2 inline-block h-1.5 w-1.5 -translate-y-px rounded-full align-middle ${tone === "amber" ? "bg-ambre" : "bg-white/40"}`} />
+      <span className={tone === "amber" ? "text-ambre" : "text-white/[0.86]"}>{title}.</span>{" "}
+      <span className="text-white/[0.70]">{detail}</span>
+      {source && <span className="ml-2 font-mono text-[12px] text-white/[0.62]">Checked: {source}</span>}
+    </p>
   );
 }

@@ -5,7 +5,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The Lab is a workspace: one view at a time (kept in the URL, deep links, Back and Forward), a side
+  navigation grouped by Season, Race, Compare and Ask, a compact bar (race selector, driver chips, session
+  status "Next: … · in …" or "Live", `⌘K`, `</> API`, "Share view") and an inspector panel.
+- CSV, JSON and "Copy API request" moved to a "⋯" menu per view; `</> API` reveals the requests on demand.
+- Interface text is at least 12 px; monospace is kept for numbers and code; sources fit on one line per view.
+- Empty states are one line with the API's reason.
+- Phones: one selector, scrolling view pills, the first chart in the first screen, a bottom action bar.
+
 ### Added
+
+- Race report, the default view: four key figures computed from the API (winner, fastest lap, biggest
+  grid-to-finish gain with the same rule as the grounded answer, neutralisations) and a grid of cards.
+- "What stands out": deterministic sentences from the rows on screen, or an explicit refusal.
+- Charts: shared cursor across charts on the same axis (hover and keyboard) with a values tooltip,
+  non-overlapping end labels, clickable legend.
 
 - Optional "AI — your own key" mode in Ask the data: Anthropic, OpenAI, OpenRouter, Groq, Ollama or any
   OpenAI-compatible endpoint, called directly from the browser (Vercel AI SDK). The grounded endpoint stays

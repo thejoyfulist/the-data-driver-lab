@@ -18,10 +18,11 @@ test("Data Lab exposes live API failure without crashing", async ({ page }) => {
   const status = page.getByRole("status", { name: "System status" });
   await expect(status).toBeVisible();
   await expect(status).toContainText("Season data is unavailable from the live API.");
-  await expect(page.getByRole("region", { name: "Driver head-to-head" })).toContainText(
-    "Select at least two drivers",
-  );
-  await expect(page.getByRole("region", { name: "Data explorer" })).toContainText("No rows match this query.");
+  await page.goto("/?view=h2h");
+  await expect(page.locator("#lab-head-to-head")).toContainText("Select at least two drivers");
+  await page.goto("/?view=field");
+  await page.locator("#lab-field").getByRole("button", { name: "Table" }).click();
+  await expect(page.locator("#lab-field")).toContainText("No rows match this query.");
   expect(pageErrors).toEqual([]);
 });
 
