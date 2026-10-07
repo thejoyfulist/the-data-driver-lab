@@ -47,6 +47,7 @@ function usePopover() {
 export interface PickerRace {
   round: number;
   label: string;
+  officialName?: string;
   date: string;
   status: string;
 }
@@ -59,12 +60,13 @@ interface RacePickerProps {
   round: number | null;
   /** Visible label of the selected race ("R11 · Hungarian Grand Prix"). */
   current: string | null;
+  currentOfficialName?: string;
   loading: boolean;
   onSeason: (season: number) => void;
   onRace: (round: number) => void;
 }
 
-export function RacePicker({ season, seasons, liveSeason, races, round, current, loading, onSeason, onRace }: RacePickerProps) {
+export function RacePicker({ season, seasons, liveSeason, races, round, current, currentOfficialName, loading, onSeason, onRace }: RacePickerProps) {
   const { open: popoverOpen, setOpen: setPopoverOpen, triggerRef, panelRef, onPanelKeyDown, close: closePopover } = usePopover();
   const panelId = useId();
   useEffect(() => {
@@ -82,6 +84,7 @@ export function RacePicker({ season, seasons, liveSeason, races, round, current,
         onClick={() => setPopoverOpen(!popoverOpen)}
         className={`${barButton} max-w-full bg-white/[0.04]`}
         data-race-picker
+        title={currentOfficialName}
       >
         <span className="sr-only">Season and race: </span>
         <span className="truncate">
@@ -118,6 +121,7 @@ export function RacePicker({ season, seasons, liveSeason, races, round, current,
                     closePopover();
                   }}
                   className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 text-left text-[14px] ${focusRing} ${race.round === round ? "bg-white/[0.08] text-light" : "text-white/[0.80] hover:bg-white/[0.05]"}`}
+                  title={race.officialName}
                 >
                   <span className="min-w-0 truncate">{race.label}</span>
                   <span className="shrink-0 text-[12px] text-white/[0.66]">{race.date}{race.status !== "completed" ? ` · ${race.status}` : ""}</span>
@@ -230,9 +234,14 @@ interface ViewNavProps {
  */
 export function ViewNav({ view, hrefFor, onSelect }: ViewNavProps) {
   const activeRef = useRef<HTMLAnchorElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
   useEffect(() => {
-    // Keep the active pill in sight on phones (no-op on the side rail).
-    activeRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    // Scroll only the pill row; scrollIntoView can also shift the page or leave a clipped pill.
+    const list = listRef.current;
+    const active = activeRef.current;
+    if (!list || !active || window.matchMedia("(min-width: 1024px)").matches) return;
+    const left = active.getBoundingClientRect().left - list.getBoundingClientRect().left + list.scrollLeft;
+    list.scrollLeft = Math.max(0, left);
   }, [view]);
   function onClick(event: MouseEvent<HTMLAnchorElement>, id: LabViewId) {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
@@ -241,7 +250,7 @@ export function ViewNav({ view, hrefFor, onSelect }: ViewNavProps) {
   }
   return (
     <nav aria-label="Lab views" className="min-w-0">
-      <ul className="flex gap-1 overflow-x-auto px-4 py-1.5 lg:flex-col lg:gap-0 lg:overflow-visible lg:px-0 lg:py-0">
+      <ul ref={listRef} className="flex gap-1 overflow-x-auto px-4 py-1.5 lg:flex-col lg:gap-0 lg:overflow-visible lg:px-0 lg:py-0">
         {LAB_VIEW_GROUPS.map((group) => (
           <li key={group} className="contents lg:block">
             <p className="hidden px-3 pb-1 pt-4 text-[12px] font-medium text-white/[0.62] lg:block">{group}</p>

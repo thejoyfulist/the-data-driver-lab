@@ -91,8 +91,8 @@ function Figure({ id, label, figure }: { id: string; label: string; figure: KeyF
         <dd className="mt-1 h-8 w-24 animate-pulse rounded bg-white/[0.06] motion-reduce:animate-none" role="status"><span className="sr-only">Loading {label.toLowerCase()}</span></dd>
       ) : figure.state === "ok" ? (
         <>
-          <dd className="mt-1 truncate font-serif text-[21px] leading-7 text-light md:text-[26px] md:leading-8" title={figure.value} data-figure-value>{figure.value}</dd>
-          <dd className="mt-0.5 truncate text-[13px] leading-[18px] text-white/[0.70] md:line-clamp-2 md:whitespace-normal" title={figure.detail} data-figure-detail>{figure.detail}</dd>
+          <dd className="mt-1 break-words font-serif text-[20px] leading-7 text-light md:text-[24px] md:leading-8" title={figure.value} data-figure-value>{figure.value}</dd>
+          <dd className="mt-0.5 break-words text-[13px] leading-[18px] text-white/[0.70]" title={figure.detail} data-figure-detail>{figure.detail}</dd>
         </>
       ) : (
         <>

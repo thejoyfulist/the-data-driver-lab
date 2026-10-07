@@ -421,3 +421,9 @@ body {
     transition-duration: 0.001ms !important;
   }
 }
+/* Short neutralisations retain their full title while hiding labels too wide for the band. */
+.lab-neutralisation-band { container-type: inline-size; overflow: hidden; }
+.lab-neutralisation-label { white-space: nowrap; }
+@container (max-width: 34px) {
+  .lab-neutralisation-label { display: none; }
+}

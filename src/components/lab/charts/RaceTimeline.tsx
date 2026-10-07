@@ -91,11 +91,12 @@ export function RaceTimeline({ raceLaps, bands, incidents, pitDensity, unavailab
             {bands.map((band) => (
               <span
                 key={`${band.type}-${band.start}`}
-                className={`absolute inset-y-0 flex items-center justify-center rounded-[2px] border font-mono text-[12px] text-ambre ${band.type === "VSC" ? "border-dashed border-ambre/60 bg-ambre/[0.08]" : "border-ambre/70 bg-ambre/[0.18]"}`}
-                style={{ left: pct(band.start - 1), width: `max(${pct(band.end - band.start + 1)}, 28px)` }}
+                className={`lab-neutralisation-band absolute inset-y-0 flex items-center justify-center rounded-[2px] border font-mono text-[12px] text-ambre ${band.type === "VSC" ? "border-dashed border-ambre/60 bg-ambre/[0.08]" : "border-ambre/70 bg-ambre/[0.18]"}`}
+                style={{ left: pct(band.start - 1), width: pct(band.end - band.start + 1) }}
                 title={`${band.type} · laps ${band.start}${band.endPublished ? `–${band.end}` : " · end lap not published"}`}
+                data-neutralisation-band
               >
-                {band.type}
+                <span className="lab-neutralisation-label">{band.type}</span>
               </span>
             ))}
           </span>

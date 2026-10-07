@@ -244,6 +244,7 @@ const starterQuestions = Object.values(STARTER_QUESTIONS);
 function raceLabel(name: string) {
   return name
     .replace(/^Formula 1\s+/i, "")
+    .replace(/^(?:Qatar Airways|Singapore Airlines|Etihad Airways|MSC Cruises|Louis Vuitton|Gulf Air|Crypto\.com|Moët & Chandon|TAG Heuer|Heineken|Pirelli|Aramco|Lenovo|AWS|stc)\s+/i, "")
     .replace(/\s+\d{4}$/, "");
 }
 
@@ -1498,7 +1499,7 @@ export default function LabPageClient({
 
   const sessionStatus = (
     <div
-      className={`flex min-h-6 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border-transparent py-0.5 text-[13px] transition-colors duration-200 lg:min-h-10 lg:border lg:px-3 lg:py-1.5 ${liveHighlight && !reducedMotion ? "bg-teal/[0.08]" : ""} ${statusTone}`}
+      className={`flex min-h-6 items-center gap-x-2 rounded-lg border-transparent py-0.5 text-[13px] transition-colors duration-200 lg:min-h-10 lg:border lg:px-2 lg:py-1.5 ${liveHighlight && !reducedMotion ? "bg-teal/[0.08]" : ""} ${statusTone}`}
       data-testid="lab-live-status"
       data-live-next-interval={liveActive ? nextLiveInterval([liveTtl], liveFailures) : undefined}
     >
@@ -1516,10 +1517,9 @@ export default function LabPageClient({
           <button type="button" onClick={() => selectRace(followWeekend.round)} className="min-h-11 rounded-md border border-amber-400/35 px-2 text-[13px] lg:min-h-8 hover:bg-amber-400/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70">Follow live</button>
         </>
       ) : upcomingRace ? (
-        <span className="min-w-0 truncate">
+        <span className="min-w-0 whitespace-nowrap" title={upcomingRace.name}>
           Next: {raceLabel(upcomingRace.name)}
-          {formatRaceDay(upcomingRace) ? ` · ${formatRaceDay(upcomingRace)}` : ""}
-          {countdown ? ` · in ${countdown}` : ""}
+          <span className="hidden sm:inline">{formatRaceDay(upcomingRace) ? ` · ${formatRaceDay(upcomingRace)}` : ""}{countdown ? ` · in ${countdown}` : ""}</span>
         </span>
       ) : (
         <span>No upcoming race in the calendar</span>
@@ -1827,11 +1827,11 @@ export default function LabPageClient({
     <ChartCursorProvider>
     <div className="min-h-[calc(100vh-3.5rem)] bg-dark" data-lab-hydrated={hydrated ? "true" : undefined}>
       <div className="border-b border-white/[0.06] bg-dark/95 backdrop-blur lg:sticky lg:top-14 lg:z-30" data-lab-bar>
-        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-2 px-4 py-2.5 lg:gap-2.5 lg:px-5">
+        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-2 px-4 py-2.5 lg:flex-nowrap lg:gap-2 lg:px-4">
           {SITE_URL ? (
-            <p className="hidden font-serif text-[20px] leading-7 text-light sm:block lg:mr-1">Data Lab</p>
+            <p className="hidden font-serif text-[20px] leading-7 text-light sm:block lg:hidden 2xl:block">Data Lab</p>
           ) : (
-            <Link href="/" className="hidden font-serif text-[20px] leading-7 text-light sm:block lg:mr-1">Data Lab</Link>
+            <Link href="/" className="hidden font-serif text-[20px] leading-7 text-light sm:block lg:hidden 2xl:block">Data Lab</Link>
           )}
           <div className="flex min-w-0 flex-1 items-center gap-2 lg:flex-none">
             <div className="min-w-0 flex-1 lg:flex-none">
@@ -1839,9 +1839,10 @@ export default function LabPageClient({
                 season={season}
                 seasons={AVAILABLE_SEASONS}
                 liveSeason={LIVE_SEASON}
-                races={calendar.map((race) => ({ round: race.round, label: `${officialRoundLabel(race) ? `${officialRoundLabel(race)} · ` : ""}${raceLabel(race.name)}`, date: formatDate(race.date), status: race.status }))}
+                races={calendar.map((race) => ({ round: race.round, label: `${officialRoundLabel(race) ? `${officialRoundLabel(race)} · ` : ""}${raceLabel(race.name)}`, officialName: race.name, date: formatDate(race.date), status: race.status }))}
                 round={round}
                 current={raceScopeLabel}
+                currentOfficialName={selectedRace?.name}
                 loading={isLoadingSeason}
                 onSeason={selectSeason}
                 onRace={selectRace}
@@ -1860,7 +1861,7 @@ export default function LabPageClient({
             />
           </div>
           <span className="hidden flex-1 lg:block" />
-          <div className="w-full min-w-0 lg:w-auto">{sessionStatus}</div>
+          <div className="w-full min-w-0 lg:w-auto lg:shrink-0">{sessionStatus}</div>
           <div className="hidden items-center gap-1.5 lg:flex">
             <button type="button" onClick={() => setPaletteOpen(true)} aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K" aria-label="Search the Lab (⌘K)" className={barButton}>
               <kbd className="font-mono text-[12px]">⌘K</kbd>
@@ -1871,7 +1872,7 @@ export default function LabPageClient({
             <button type="button" onClick={() => void shareView()} className={`inline-flex min-h-10 items-center rounded-lg bg-light px-3.5 text-[13px] font-medium text-dark hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70`}>
               {shareState === "copied" ? "Link copied" : shareState === "failed" ? "Copy failed" : "Share view"}
             </button>
-            {!SITE_URL && <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className={barButton}>Source ↗</a>}
+            {!SITE_URL && <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className={`${barButton} hidden 2xl:inline-flex`}>Source ↗</a>}
           </div>
           <span className="sr-only" aria-live="polite">{shareState === "copied" ? "Link to this view copied" : shareState === "failed" ? "Copy failed" : ""}</span>
         </div>
