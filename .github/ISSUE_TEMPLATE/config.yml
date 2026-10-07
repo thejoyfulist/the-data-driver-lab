@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/thejoyfulist/tdd-data-lab/security/advisories/new
+    about: Report vulnerabilities privately, not in a public issue.
+  - name: API reference
+    url: https://thedatadriver.app/api-docs
+    about: Endpoints, parameters and response formats of The Data Driver API.

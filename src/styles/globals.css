@@ -1,0 +1,423 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Motion is progressive enhancement. Framer Motion emits hidden inline styles
+   for entrance animations during SSR; reveal them when JavaScript never runs.
+   React serialises inline styles without spaces ("opacity:0;transform:…"), so
+   match both spellings, mid-string (";") and at the end of the attribute. */
+.no-js [style*="opacity:0;"],
+.no-js [style$="opacity:0"],
+.no-js [style*="opacity: 0;"],
+.no-js [style$="opacity: 0"] {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+/* ── Font faces ──────────────────────────────────────────────── */
+/* GT Sectra → Fraunces (libre, même allure éditoriale serif) */
+/* Sohne → Inter (libre, même neutralité grotesque) */
+
+/* Variable latin subsets are served locally so typography cannot fail when
+   Google Fonts changes or removes a versioned asset URL. */
+@font-face {
+  font-family: "GT Sectra";
+  src: local("GT Sectra"), local("GTSectra-Regular"),
+       url("/fonts/fraunces-latin.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Sohne";
+  src: local("Sohne"), local("Söhne"), local("Sohne-Regular"),
+       url("/fonts/inter-latin.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── CSS Custom Properties — SENNA DNA ────────────────────────── */
+:root {
+  /* Core colors */
+  --color-dark: #080a0d;
+  --color-light: #f3f6fa;
+  --color-rouge: #b8272c;
+  --color-teal: #d7dee8;
+  --color-ambre: #d4a72d;
+  --color-gris: #8d98a7;
+
+  /* Fonts */
+  --font-serif: "GT Sectra", "Georgia", "Times New Roman", serif;
+  --font-sans: "Sohne", "Suisse Intl", "Inter", -apple-system, "Helvetica Neue", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+
+  /* Surface hierarchy — Linear-inspired 5-level system */
+  --surface-0: #080A0D;
+  --surface-1: #0D1117;
+  --surface-2: #131922;
+  --surface-3: #1A2230;
+  --surface-4: #202A38;
+
+  /* Border opacity tokens */
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --border-default: rgba(255, 255, 255, 0.06);
+  --border-visible: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.14);
+
+  /* Text hierarchy tokens */
+  --text-primary: rgb(250, 250, 250);
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-tertiary: rgba(255, 255, 255, 0.68);
+  /* Every token used for readable text clears 4.5:1 on surface-0. */
+  --text-muted: rgba(255, 255, 255, 0.62);
+  /* Decorative only; never use for labels, controls, or other information. */
+  --text-ghost: rgba(255, 255, 255, 0.50);
+
+  /* Timing tokens — Linear 0.16s snappy + Vercel 0.15s clean */
+  --duration-fast: 0.1s;
+  --duration-normal: 0.15s;
+  --duration-medium: 0.2s;
+  --duration-slow: 0.4s;
+  --duration-entrance: 0.7s;
+
+  /* Easing tokens — SENNA benchmark values */
+  --ease-snappy: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-overshoot: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-entrance: cubic-bezier(0.33, 0.12, 0.15, 1);
+  --ease-transform: cubic-bezier(0.31, 0.05, 0.43, 1.02);
+  --ease-slide: cubic-bezier(0.5, 0.25, 0.35, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Border radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+}
+
+/* ── Base reset ──────────────────────────────────────────────── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--surface-0);
+  color: var(--color-light);
+  line-height: 1.5;
+}
+
+/* ── Live race intelligence stage ─────────── */
+/* Flat surfaces only: the design charter forbids gradients, so the signal
+ * grid is drawn with hairline SVG tiles instead of gradient stops. */
+.soty-forecast-stage {
+  isolation: isolate;
+  background: var(--surface-0);
+}
+
+.soty-signal-grid {
+  z-index: -3;
+  opacity: 0.24;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10' preserveAspectRatio='none'%3E%3Cpath d='M0 0H10' stroke='%23fff' stroke-opacity='.035' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10' preserveAspectRatio='none'%3E%3Cpath d='M0 0V10' stroke='%23fff' stroke-opacity='.025' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+  background-size: 100% 12.5%, 8.333% 100%;
+}
+
+/* Keyboard focus must remain visible against every dark surface. */
+:focus-visible {
+  outline: 2px solid var(--color-teal);
+  outline-offset: 3px;
+}
+
+/* ── Custom scrollbar — nearly invisible (SENNA directive) ──── */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.10);
+}
+
+/* ── Typography utilities ────────────────────────────────────── */
+@layer components {
+  .data-percentage {
+    font-family: var(--font-serif);
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+  }
+  .data-number {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .label-upper {
+    font-family: var(--font-sans);
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .section-index {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .control-input,
+  .control-select {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.20);
+    padding: 0 12px;
+    color: rgba(255, 255, 255, 0.84);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    outline: none;
+    transition: border-color 160ms ease, background-color 160ms ease;
+  }
+  .control-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='4' viewBox='0 0 8 4'%3E%3Cpath d='M0 0L4 4L8 0Z' fill='%23fff' fill-opacity='.45'/%3E%3C/svg%3E");
+    background-position: calc(100% - 12px) 18px;
+    background-size: 8px 4px;
+    background-repeat: no-repeat;
+    padding-right: 32px;
+  }
+  .control-input::placeholder { color: rgba(255, 255, 255, 0.38); }
+  .control-input:focus,
+  .control-select:focus { border-color: rgba(215, 222, 232, 0.75); background-color: rgba(215, 222, 232, 0.06); }
+  .control-select option { background: #17171a; color: rgba(255, 255, 255, 0.84); }
+}
+
+/* ── Motorsport signal rail — shared premium motion signature ─── */
+.premium-motion-rail {
+  display: grid;
+  grid-template-columns: max-content minmax(80px, 1fr) max-content;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.premium-motion-rail__track {
+  position: relative;
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='8'%3E%3Crect width='1' height='8' fill='%23fff' fill-opacity='.1'/%3E%3C/svg%3E");
+  background-size: 24px 8px;
+}
+
+.premium-motion-rail__track::after {
+  content: "";
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 1px;
+  background: rgba(215, 222, 232, 0.12);
+}
+
+.premium-motion-rail__signal {
+  position: absolute;
+  z-index: 1;
+  top: 3px;
+  left: 0;
+  width: min(16vw, 150px);
+  height: 2px;
+  background: rgba(215, 222, 232, 0.7);
+  box-shadow: 0 0 10px rgba(215, 222, 232, 0.28);
+  animation: premium-signal-scan 5.8s var(--ease-slide) infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes premium-signal-scan {
+  0%, 12% { opacity: 0; transform: translate3d(-160px, 0, 0); }
+  22% { opacity: 1; }
+  78% { opacity: 1; }
+  88%, 100% { opacity: 0; transform: translate3d(calc(100vw - 120px), 0, 0); }
+}
+
+@media (max-width: 640px) {
+  .premium-motion-rail { grid-template-columns: max-content minmax(64px, 1fr); }
+  .premium-motion-rail__detail { display: none; }
+}
+
+/* ── Page transition keyframes ───────────────────────────────── */
+@keyframes page-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Scrollbar-none utility ──────────────────────────────────── */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Selection ───────────────────────────────────────────────── */
+::selection {
+  background-color: rgba(184, 39, 44, 0.2);
+  color: var(--color-light);
+}
+
+/* ── Chart canvas — Bloomberg-style dotted grid (SENNA dataviz) ── */
+.chart-canvas {
+  position: relative;
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='1' fill='%23FAFAF8' fill-opacity='.07'/%3E%3C/svg%3E");
+  background-size: 24px 24px;
+  background-position: center center;
+  border-radius: 4px;
+}
+
+.chart-canvas--dense {
+  background-size: 16px 16px;
+}
+
+.chart-canvas--clean {
+  background-image: none;
+}
+
+/* ── Value flash — terminal data reveal (SENNA dataviz) ─────── */
+@keyframes value-flash {
+  0% {
+    opacity: 0;
+    color: rgba(215, 222, 232, 1);
+    text-shadow: 0 0 8px rgba(215, 222, 232, 0.2);
+  }
+  30% {
+    opacity: 1;
+    color: rgba(215, 222, 232, 1);
+    text-shadow: 0 0 12px rgba(215, 222, 232, 0.15);
+  }
+  100% {
+    opacity: 1;
+    color: rgba(215, 222, 232, 1);
+    text-shadow: none;
+  }
+}
+
+@keyframes value-flash-rouge {
+  0% {
+    opacity: 0;
+    color: rgba(184, 39, 44, 1);
+    text-shadow: 0 0 8px rgba(184, 39, 44, 0.4);
+  }
+  30% {
+    opacity: 1;
+    color: rgba(184, 39, 44, 1);
+    text-shadow: 0 0 12px rgba(184, 39, 44, 0.3);
+  }
+  100% {
+    opacity: 1;
+    color: rgba(184, 39, 44, 1);
+    text-shadow: none;
+  }
+}
+
+@keyframes value-flash-ambre {
+  0% {
+    opacity: 0;
+    color: rgba(212, 167, 45, 1);
+    text-shadow: 0 0 8px rgba(212, 167, 45, 0.4);
+  }
+  30% {
+    opacity: 1;
+    color: rgba(212, 167, 45, 1);
+    text-shadow: 0 0 12px rgba(212, 167, 45, 0.3);
+  }
+  100% {
+    opacity: 1;
+    color: rgba(212, 167, 45, 1);
+    text-shadow: none;
+  }
+}
+
+.value-flash {
+  animation: value-flash 600ms var(--ease-snappy) forwards;
+}
+.value-flash-rouge {
+  animation: value-flash-rouge 600ms var(--ease-snappy) forwards;
+}
+.value-flash-ambre {
+  animation: value-flash-ambre 600ms var(--ease-snappy) forwards;
+}
+
+/* ── F1 driver photos — dark mode cohesion filter ─────────────── */
+.f1-photo {
+  filter: brightness(0.9) contrast(1.1);
+}
+
+/* ── 3D tilt utilities ───────────────────────────────────────── */
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+.perspective-800 {
+  perspective: 800px;
+}
+.perspective-1200 {
+  perspective: 1200px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .premium-motion-rail__signal {
+    animation: none;
+    left: 50%;
+    opacity: 0.45;
+    transform: translate3d(-50%, 0, 0);
+    will-change: auto;
+  }
+
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+}

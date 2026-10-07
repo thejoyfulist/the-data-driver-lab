@@ -1,0 +1,48 @@
+{
+  "name": "tdd-data-lab",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Open-source Formula 1 Data Lab built on the public The Data Driver API.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
+    "test:e2e": "playwright test",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "framer-motion": "^12.36.0",
+    "next": "16.3.8",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.20",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.3.8",
+    "postcss": "8.5.25",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "js-yaml": "4.3.2",
+    "eslint-plugin-react-hooks": "7.0.1",
+    "minimatch@<=10.0.2": "10.2.6",
+    "brace-expansion": "5.0.12",
+    "next@16.3.8": {
+      "postcss": "8.5.25",
+      "sharp": "0.35.5"
+    }
+  }
+}

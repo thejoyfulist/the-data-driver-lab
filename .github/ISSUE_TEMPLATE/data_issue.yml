@@ -1,0 +1,23 @@
+name: Data issue
+description: A figure in the Lab looks wrong or is missing.
+labels: [data]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use "Copy API request" in the view and compare the figure with the API response first.
+        If the API itself is wrong, say so — we route it to the API.
+  - type: input
+    id: endpoint
+    attributes:
+      label: API request
+      placeholder: GET https://api.thedatadriver.app/v1/f1/...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected value and official source
+      description: Link to formula1.com or fia.com for official results, standings and classifications.
+    validations:
+      required: true

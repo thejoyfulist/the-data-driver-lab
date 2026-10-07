@@ -1,0 +1,17 @@
+services:
+  data-lab:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_TDD_API_BASE: ${NEXT_PUBLIC_TDD_API_BASE:-https://api.thedatadriver.app}
+    image: tdd-data-lab:local
+    environment:
+      TDD_API_BASE: ${TDD_API_BASE:-https://api.thedatadriver.app}
+    ports:
+      # Bound to localhost; put a reverse proxy in front to expose it.
+      - "127.0.0.1:${PORT:-3000}:3000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
