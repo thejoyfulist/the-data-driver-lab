@@ -295,7 +295,14 @@ export function biggestClimbFigure(positionsData, results = []) {
   const covered = published
     ? series.drivers.filter((driver) => driver.finish != null && driver.points.some((point) => point.lap >= 1) && hasCompletePositions(driver, resultFor(results, driver), series.raceLaps))
     : [];
-  const whole = covered.length > 0 && covered.length >= classifiedCount && series.availability !== "partial";
+  // Whole-race only when every classified driver is among the covered ones (same identities, not just the same count).
+  const coveredCodes = new Set(covered.map((driver) => driver.code));
+  const classifiedCodes = (Array.isArray(results) ? results : [])
+    .filter((result) => isInt(result?.position) && result.position >= 1)
+    .map((result) => result.driver_code ?? result.code)
+    .filter(Boolean);
+  const sameIdentities = classifiedCodes.every((code) => coveredCodes.has(code));
+  const whole = covered.length > 0 && covered.length >= classifiedCount && sameIdentities && series.availability !== "partial";
 
   if (covered.length) {
     const basis = whole ? "positions" : "positions-partial";
