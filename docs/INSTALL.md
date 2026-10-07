@@ -14,8 +14,8 @@ The Lab is a standard Next.js 16 application. Pick the option that suits you.
 Requirements: Node.js **20.9 or later** (22 LTS recommended), npm 10+, Git.
 
 ```bash
-git clone https://github.com/thejoyfulist/tdd-data-lab.git
-cd tdd-data-lab
+git clone https://github.com/thejoyfulist/the-data-driver-lab.git
+cd the-data-driver-lab
 npm install
 npm run dev
 ```
@@ -55,15 +55,15 @@ docker compose logs -f data-lab
 Without Compose:
 
 ```bash
-docker build -t tdd-data-lab .
-docker run --rm -p 127.0.0.1:3000:3000 tdd-data-lab
+docker build -t the-data-driver-lab .
+docker run --rm -p 127.0.0.1:3000:3000 the-data-driver-lab
 ```
 
 Point the image at another API:
 
 ```bash
-docker build --build-arg NEXT_PUBLIC_TDD_API_BASE=https://api.example.org -t tdd-data-lab .
-docker run --rm -p 127.0.0.1:3000:3000 -e TDD_API_BASE=https://api.example.org tdd-data-lab
+docker build --build-arg NEXT_PUBLIC_TDD_API_BASE=https://api.example.org -t the-data-driver-lab .
+docker run --rm -p 127.0.0.1:3000:3000 -e TDD_API_BASE=https://api.example.org the-data-driver-lab
 ```
 
 `NEXT_PUBLIC_*` values are compiled into the client bundle, so they are build arguments; `TDD_API_BASE` is
@@ -85,7 +85,7 @@ No database, secret or paid service is required.
 | --- | --- | --- | --- |
 | `TDD_API_BASE` | runtime, server only | `https://api.thedatadriver.app` | Upstream for the server page and the `/api/f1` proxy. Without a trailing `/v1`. |
 | `NEXT_PUBLIC_TDD_API_BASE` | build time | `https://api.thedatadriver.app` | Shown in "copy API request"; added to the CSP `connect-src`. Fallback for `TDD_API_BASE`. |
-| `NEXT_PUBLIC_TDD_REPO_URL` | build time | `https://github.com/thejoyfulist/tdd-data-lab` | "Source" link. |
+| `NEXT_PUBLIC_TDD_REPO_URL` | build time | `https://github.com/thejoyfulist/the-data-driver-lab` | "Source" link. |
 | `PORT`, `HOSTNAME` | runtime | `3000`, `localhost` (`0.0.0.0` in Docker) | Standard Next.js server settings. |
 
 A different upstream must serve the same `/v1/f1/...` contract as The Data Driver API (see [API.md](API.md)).

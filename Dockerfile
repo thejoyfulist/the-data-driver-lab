@@ -11,7 +11,7 @@ FROM node:22-alpine AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_TDD_API_BASE=https://api.thedatadriver.app
-ARG NEXT_PUBLIC_TDD_REPO_URL=https://github.com/thejoyfulist/tdd-data-lab
+ARG NEXT_PUBLIC_TDD_REPO_URL=https://github.com/thejoyfulist/the-data-driver-lab
 ENV NEXT_PUBLIC_TDD_API_BASE=$NEXT_PUBLIC_TDD_API_BASE \
     NEXT_PUBLIC_TDD_REPO_URL=$NEXT_PUBLIC_TDD_REPO_URL
 COPY --from=deps /app/node_modules ./node_modules

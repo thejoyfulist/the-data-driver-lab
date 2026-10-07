@@ -1,10 +1,3 @@
-<!--
-  Values to confirm before publication:
-  REPO_URL     = https://github.com/thejoyfulist/tdd-data-lab
-  LICENSE_HOLDER (see LICENSE) = The Data Driver contributors
-  Search and replace REPO_URL below if the repository moves.
--->
-
 # The Data Driver — Data Lab
 
 **Explore, compare and export Formula 1 data in your browser.** The Data Lab is the open-source
@@ -12,11 +5,11 @@ analysis workspace of [The Data Driver](https://thedatadriver.app/lab): pick a r
 compare the field. Every view is built from a public API, can be exported, and shows the request behind it.
 Unavailable data stays unavailable — nothing is guessed or back-filled.
 
-[![CI](https://github.com/thejoyfulist/tdd-data-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/thejoyfulist/tdd-data-lab/actions/workflows/ci.yml)
+[![CI](https://github.com/thejoyfulist/the-data-driver-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/thejoyfulist/the-data-driver-lab/actions/workflows/ci.yml)
 [![Licence: MIT](https://img.shields.io/badge/code-MIT-informational)](LICENSE)
 [![Data: see licences](https://img.shields.io/badge/data-see%20licences-lightgrey)](#data-licences)
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fthejoyfulist%2Ftdd-data-lab&project-name=tdd-data-lab&repository-name=tdd-data-lab)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fthejoyfulist%2Fthe-data-driver-lab&project-name=the-data-driver-lab&repository-name=the-data-driver-lab)
 
 ![The Data Lab on desktop](docs/screenshots/lab-desktop.png)
 
@@ -50,8 +43,8 @@ Unavailable data stays unavailable — nothing is guessed or back-filled.
 Requirements: Node.js 20.9 or later (22 LTS recommended) and npm.
 
 ```bash
-git clone https://github.com/thejoyfulist/tdd-data-lab.git
-cd tdd-data-lab
+git clone https://github.com/thejoyfulist/the-data-driver-lab.git
+cd the-data-driver-lab
 npm install
 npm run dev
 ```

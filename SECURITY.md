@@ -7,7 +7,7 @@ Only the latest release on `main` receives security fixes.
 ## Reporting a vulnerability
 
 Please **do not open a public issue** for a vulnerability. Use GitHub's
-[private vulnerability reporting](https://github.com/thejoyfulist/tdd-data-lab/security/advisories/new)
+[private vulnerability reporting](https://github.com/thejoyfulist/the-data-driver-lab/security/advisories/new)
 for this repository. Include the affected version or commit, reproduction steps and the impact you observed.
 
 You can expect an acknowledgement within a week. Please give us reasonable time to fix the issue before any
