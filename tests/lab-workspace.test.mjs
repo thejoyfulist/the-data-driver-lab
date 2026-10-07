@@ -29,15 +29,25 @@ import {
 } from "../src/lib/lab-insights.mjs";
 import { buildStarterAnswer, STARTER_QUESTIONS } from "../src/lib/lab-grounded-queries.mjs";
 import { spreadLabels } from "../src/components/lab/charts/label-layout.mjs";
+import {
+  biggestClimbFigure,
+  buildPositionSeries,
+  buildTyreStrategy,
+  compoundSequence,
+  describeStint,
+  normaliseCompound,
+  orderAtLap,
+  TYRE_COMPOUNDS,
+} from "../src/lib/lab-strategy.mjs";
 
 const result = (first, last, position, grid, extra = {}) => ({ first_name: first, last_name: last, driver_code: last.slice(0, 3).toUpperCase(), team_name: "Fixture Team", position, grid, laps: 57, ...extra });
 
-test("the workspace has twelve views in four groups, each with a unique anchor", () => {
-  assert.equal(LAB_VIEWS.length, 12);
+test("the workspace has thirteen views in four groups, each with a unique anchor", () => {
+  assert.equal(LAB_VIEWS.length, 13);
   assert.deepEqual(LAB_VIEW_GROUPS, ["Season", "Race", "Compare", "Ask"]);
-  assert.equal(new Set(LAB_VIEWS.map((view) => view.anchor)).size, 12);
+  assert.equal(new Set(LAB_VIEWS.map((view) => view.anchor)).size, 13);
   assert.ok(LAB_VIEWS.every((view) => LAB_VIEW_GROUPS.includes(view.group)));
-  assert.deepEqual(LAB_VIEWS.filter((view) => view.group === "Race").map((view) => view.label), ["Race report", "Race pace", "Fastest laps", "Strategy", "Race timeline", "Sessions"]);
+  assert.deepEqual(LAB_VIEWS.filter((view) => view.group === "Race").map((view) => view.label), ["Race report", "Race pace", "Fastest laps", "Strategy", "Positions", "Race timeline", "Sessions"]);
 });
 
 test("the view in the URL is honoured; anything else falls back to the default", () => {
@@ -210,4 +220,121 @@ test("Lab interface text is at least 12 px and drops mono uppercase micro-labels
     ];
   });
   assert.deepEqual(offenders, []);
+});
+
+// ── Tyre strategy and lap-by-lap positions (lot H) ──────────────────────
+
+const contractDriver = (id, code, first, last, extra = {}) => ({ driver_id: id, driver_code: code, first_name: first, last_name: last, team_name: "Fixture Team", ...extra });
+const classified = [
+  { driver_id: 1, driver_code: "AAA", first_name: "Ann", last_name: "Alpha", position: 1, grid: 3, laps: 50 },
+  { driver_id: 2, driver_code: "BBB", first_name: "Bea", last_name: "Bravo", position: 2, grid: 1, laps: 50 },
+  { driver_id: 3, driver_code: "CCC", first_name: "Cal", last_name: "Charlie", position: 3, grid: 6, laps: 50 },
+  { driver_id: 4, driver_code: "DDD", first_name: "Dee", last_name: "Delta", position: null, grid: 2, laps: 12, status: "DNF" },
+];
+
+test("compounds: the five Pirelli compounds each have a letter, a pattern and readable text", () => {
+  assert.deepEqual(["SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET"].map((id) => TYRE_COMPOUNDS[id].letter), ["S", "M", "H", "I", "W"]);
+  assert.equal(new Set(Object.values(TYRE_COMPOUNDS).map((compound) => compound.pattern)).size, Object.keys(TYRE_COMPOUNDS).length);
+  assert.equal(normaliseCompound("medium"), "MEDIUM");
+  assert.equal(normaliseCompound("INTER"), "INTERMEDIATE");
+  assert.equal(normaliseCompound("HYPERSOFT"), "UNKNOWN");
+  assert.equal(normaliseCompound(null), "UNKNOWN");
+  // WCAG contrast of the letter on its compound colour.
+  const channel = (hex, index) => {
+    const value = Number.parseInt(hex.slice(1 + index * 2, 3 + index * 2), 16) / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (hex) => 0.2126 * channel(hex, 0) + 0.7152 * channel(hex, 1) + 0.0722 * channel(hex, 2);
+  for (const compound of Object.values(TYRE_COMPOUNDS)) {
+    const [light, dark] = [luminance(compound.fill), luminance(compound.text)].sort((a, b) => b - a);
+    assert.ok((light + 0.05) / (dark + 0.05) >= 4.5, `${compound.id} letter contrast`);
+  }
+});
+
+test("strategy: rows in finishing order, official stops when published, stint changes otherwise", () => {
+  const stints = {
+    availability: "complete",
+    race_laps: 50,
+    drivers: [
+      contractDriver(4, "DDD", "Dee", "Delta", { stints: [{ stint_number: 1, compound: "SOFT", start_lap: 1, end_lap: 12, laps: 12, tyre_age_at_start: 0 }] }),
+      contractDriver(3, "CCC", "Cal", "Charlie", { stints: [
+        { stint_number: 2, compound: "HARD", start_lap: 21, end_lap: 50, laps: 30, tyre_age_at_start: 2 },
+        { stint_number: 1, compound: "MEDIUM", start_lap: 1, end_lap: 20, laps: 20, tyre_age_at_start: 0 },
+      ] }),
+      contractDriver(1, "AAA", "Ann", "Alpha", { stints: [
+        { stint_number: 1, compound: "MEDIUM", start_lap: 1, end_lap: 25, laps: 25, tyre_age_at_start: null },
+        { stint_number: 2, compound: "mystery", start_lap: 26, end_lap: 50, laps: 25, tyre_age_at_start: 0 },
+        { stint_number: 3, compound: "SOFT", start_lap: 40, end_lap: 39, laps: 0 },
+      ] }),
+      contractDriver(2, "BBB", "Bea", "Bravo", { stints: [] }),
+    ],
+  };
+  const pitStops = [{ driver_code: "AAA", lap: 25, duration_ms: 21_900 }];
+  const strategy = buildTyreStrategy(stints, classified, pitStops);
+  assert.equal(strategy.availability, "complete");
+  assert.equal(strategy.maxLap, 50);
+  // Bravo has no stint: no row (never drawn as "no stop"); Delta (DNF) last.
+  assert.deepEqual(strategy.rows.map((row) => [row.code, row.finish]), [["AAA", 1], ["CCC", 3], ["DDD", null]]);
+  const [alpha, charlie, delta] = strategy.rows;
+  assert.equal(compoundSequence(alpha), "M–?");
+  assert.deepEqual(alpha.stops, [{ lap: 25, durationMs: 21_900, derived: false }]);
+  assert.equal(alpha.stints.length, 2, "an inverted stint is dropped");
+  assert.equal(alpha.stints[0].ageAtStart, null);
+  assert.deepEqual(charlie.stints.map((stint) => [stint.compound, stint.start, stint.end]), [["MEDIUM", 1, 20], ["HARD", 21, 50]]);
+  assert.deepEqual(charlie.stops, [{ lap: 20, durationMs: null, derived: true }]);
+  assert.equal(describeStint(charlie.stints[1]), "Hard, laps 21–50 (30 laps), tyres 2 laps old at the start");
+  assert.equal(describeStint(charlie.stints[0]), "Medium, laps 1–20 (20 laps), new tyres");
+  assert.equal(delta.stops.length, 0);
+  assert.deepEqual(buildTyreStrategy({ availability: "unavailable", reason: "Not yet", drivers: [] }).rows, []);
+  assert.equal(buildTyreStrategy(null).availability, null);
+});
+
+const positionsFixture = {
+  availability: "complete",
+  method: "Order at each lap line",
+  race_laps: 5,
+  drivers: [
+    // Charlie: P6 on the grid, drops to P8 on lap 2, finishes P3 → +5 in the race (+3 grid to finish).
+    contractDriver(3, "CCC", "Cal", "Charlie", { grid: 6, finish: 3, positions: [{ lap: 0, position: 6 }, { lap: 1, position: 7 }, { lap: 2, position: 8 }, { lap: 3, position: 5 }, { lap: 5, position: 3 }] }),
+    contractDriver(1, "AAA", "Ann", "Alpha", { grid: 3, finish: 1, positions: [{ lap: 0, position: 3 }, { lap: 1, position: 2 }, { lap: 2, position: 1 }, { lap: 2, position: 4 }, { lap: 5, position: 1 }, { lap: 6, position: 0 }] }),
+    contractDriver(2, "BBB", "Bea", "Bravo", { grid: 1, finish: 2, positions: [{ lap: 0, position: 1 }, { lap: 1, position: 1 }, { lap: 5, position: 2 }] }),
+    contractDriver(4, "DDD", "Dee", "Delta", { grid: 2, finish: null, positions: [{ lap: 0, position: 2 }, { lap: 1, position: 3 }] }),
+  ],
+};
+
+test("positions: series in finishing order, gaps kept, duplicates and invalid rows dropped", () => {
+  const series = buildPositionSeries(positionsFixture, classified);
+  assert.equal(series.method, "Order at each lap line");
+  assert.equal(series.maxLap, 5);
+  assert.equal(series.maxPosition, 8);
+  assert.deepEqual(series.drivers.map((driver) => driver.code), ["AAA", "BBB", "CCC", "DDD"]);
+  assert.deepEqual(series.drivers[0].points.map((point) => point.lap), [0, 1, 2, 5]);
+  assert.equal(series.drivers[0].points[2].position, 1, "the first value of a duplicated lap is kept");
+  assert.deepEqual(series.drivers[2].points.map((point) => point.lap), [0, 1, 2, 3, 5], "lap 4 stays missing");
+  assert.deepEqual(orderAtLap(series, 1).map((entry) => `${entry.position}:${entry.driver.code}`), ["1:BBB", "2:AAA", "3:DDD", "7:CCC"]);
+  assert.deepEqual(orderAtLap(series, 4), []);
+});
+
+test("biggest climb: from the lowest position held (grid included) to the finish, classified drivers only", () => {
+  assert.deepEqual(biggestClimbFigure(positionsFixture, classified), { state: "ok", value: "+5", detail: "Cal Charlie, P8 on lap 2 to P3", basis: "positions", code: "CCC" });
+  // A driver who never ran lower than the grid climbs from the grid.
+  const fromGrid = { ...positionsFixture, drivers: [contractDriver(3, "CCC", "Cal", "Charlie", { grid: 6, finish: 3, positions: [{ lap: 0, position: 6 }, { lap: 1, position: 5 }, { lap: 5, position: 3 }] })] };
+  assert.equal(biggestClimbFigure(fromGrid, classified).detail, "Cal Charlie, P6 on the grid to P3");
+  // Ties are named, never resolved silently.
+  const tied = { ...positionsFixture, drivers: [
+    contractDriver(1, "AAA", "Ann", "Alpha", { finish: 1, positions: [{ lap: 0, position: 3 }, { lap: 2, position: 3 }, { lap: 5, position: 1 }] }),
+    contractDriver(2, "BBB", "Bea", "Bravo", { finish: 2, positions: [{ lap: 0, position: 4 }, { lap: 5, position: 2 }] }),
+  ] };
+  assert.deepEqual(biggestClimbFigure(tied, classified), { state: "ok", value: "+2", detail: "Tied: Ann Alpha and Bea Bravo", basis: "positions" });
+  const flat = { ...positionsFixture, drivers: [contractDriver(1, "AAA", "Ann", "Alpha", { finish: 1, positions: [{ lap: 0, position: 1 }, { lap: 5, position: 1 }] })] };
+  assert.equal(biggestClimbFigure(flat, classified).value, "0");
+});
+
+test("biggest climb: falls back to grid → finish from the classification, and says so", () => {
+  const expected = { state: "ok", value: "+3", detail: "Cal Charlie, P6 to P3", basis: "grid", code: "CCC" };
+  assert.deepEqual(biggestClimbFigure(null, classified), expected);
+  assert.deepEqual(biggestClimbFigure({ availability: "unavailable", reason: "Not yet", drivers: [] }, classified), expected);
+  // Positions published only for the grid (no lap run yet): not a race climb.
+  assert.deepEqual(biggestClimbFigure({ drivers: [contractDriver(1, "AAA", "Ann", "Alpha", { finish: 1, positions: [{ lap: 0, position: 3 }] })] }, classified), expected);
+  assert.deepEqual(biggestClimbFigure(null, []), { state: "unavailable", reason: "Lap-by-lap positions are not published and no classified result has a grid position." });
 });

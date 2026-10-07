@@ -42,6 +42,8 @@ const SAMPLE_INPUT = {
   f1_practice_best: { season: 2026, api_round: 17, session: "FP2" },
   f1_driver_laps: { season: 2026, api_round: 17, driver_id: 320 },
   f1_pit_stops: { season: 2026, api_round: 17 },
+  f1_stints: { season: 2026, api_round: 17 },
+  f1_positions: { season: 2026, api_round: 17 },
   f1_safety_cars: { season: 2026, api_round: 17 },
   f1_incidents: { season: 2026, api_round: 17 },
   f1_weather: { season: 2026, api_round: 17 },
@@ -65,12 +67,23 @@ test("catalogue: unique snake_case names, a description and a sample for every t
   }
 });
 
+// The proxy allow-list for /stints and /positions ships with the engine lot
+// (H1). Until it lands, the browser tools answer 404 through the proxy (the
+// MCP server and the bench read the API directly); once allowed, they are
+// checked like every other tool.
+const PROXY_PENDING = new Map([
+  ["f1_stints", /^\/v1\/f1\/races\/\d{4}\/\d{1,2}\/stints$/],
+  ["f1_positions", /^\/v1\/f1\/races\/\d{4}\/\d{1,2}\/positions$/],
+]);
+
 test("catalogue: every tool reads a GET path the proxy allows (no write tool)", () => {
   for (const tool of F1_TOOLS) {
     const input = tool.inputSchema.parse(SAMPLE_INPUT[tool.name]);
     const path = tool.path(input);
     assert.ok(path.startsWith("/v1/f1/"), path);
-    assert.equal(isAllowedProxyPath("GET", path.slice(1).split("/")), true, `${tool.name}: ${path}`);
+    const allowed = isAllowedProxyPath("GET", path.slice(1).split("/"));
+    if (PROXY_PENDING.has(tool.name) && !allowed) assert.match(path, PROXY_PENDING.get(tool.name));
+    else assert.equal(allowed, true, `${tool.name}: ${path}`);
     assert.equal(isAllowedProxyPath("POST", path.slice(1).split("/")), false);
   }
 });
@@ -216,6 +229,98 @@ test("catalogue: safety cars and datasets report a cut list", async () => {
   assert.deepEqual(status.truncated, { shown: 20, total: 25 });
   const few = await runnerFor({ "/v1/f1/races/2026/17/safety-cars": ok(periods.slice(0, 2), { source: "openf1" }) }).call("f1_safety_cars", { season: 2026, api_round: 17 });
   assert.equal(few.truncated, undefined);
+});
+
+// Lot H contract: 22 drivers, three stints each, positions from the grid to lap 57.
+const openf1Meta = { source: "openf1.org", license: "CC BY-NC-SA 4.0", attribution: "Contains data from OpenF1 (https://openf1.org/).", data_fetched_at: "2026-10-05T16:00:00Z" };
+const contractDrivers = Array.from({ length: 22 }, (_, index) => ({
+  driver_id: 100 + index, driver_code: `D${String.fromCharCode(65 + Math.floor(index / 26))}${String.fromCharCode(65 + (index % 26))}`,
+  first_name: "Fixture", last_name: `Driver ${index + 1}`, team_name: "Fixture Team",
+}));
+const stintsPayload = {
+  availability: "complete", reason: null, race_laps: 57,
+  drivers: contractDrivers.map((driver) => ({
+    ...driver,
+    stints: [
+      { stint_number: 1, compound: "MEDIUM", start_lap: 1, end_lap: 20, laps: 20, tyre_age_at_start: 0 },
+      { stint_number: 2, compound: "HARD", start_lap: 21, end_lap: 40, laps: 20, tyre_age_at_start: 3 },
+      { stint_number: 3, compound: "SOFT", start_lap: 41, end_lap: 57, laps: 17, tyre_age_at_start: 0 },
+    ],
+  })),
+};
+const positionsPayload = {
+  availability: "partial", reason: "Lap 30 is missing for one driver.", method: "Order of lap completion from OpenF1 /position", race_laps: 57,
+  drivers: contractDrivers.map((driver, index) => ({
+    ...driver, grid: index + 1, finish: 22 - index,
+    positions: Array.from({ length: 58 }, (_, lap) => ({ lap, position: lap === 0 ? index + 1 : lap < 30 ? index + 1 : 22 - index }))
+      .filter((point) => !(index === 0 && point.lap === 30)),
+  })),
+};
+
+test("catalogue: f1_stints is bounded, sourced and keeps the contract's fields", async () => {
+  const runner = runnerFor({ "/v1/f1/races/2026/17/stints": ok(stintsPayload, openf1Meta) });
+  const result = await runner.call("f1_stints", { season: 2026, api_round: 17 });
+  assert.equal(result.ok, true);
+  assert.equal(result.availability, "complete");
+  assert.equal(result.data.race_laps, 57);
+  assert.equal(result.data.drivers.length, 10);
+  assert.deepEqual(result.truncated, { shown: 10, total: 22 });
+  assert.equal(result.data.drivers[0].sequence, "MEDIUM-HARD-SOFT");
+  assert.equal(result.data.drivers[0].stops, 2);
+  assert.deepEqual(result.data.drivers[0].stints[1], { stint: 2, compound: "HARD", start_lap: 21, end_lap: 40, laps: 20, tyre_age_at_start: 3 });
+  assert.equal(result.source.kind, "openf1_enrichment");
+  assert.equal(result.source.licence, "CC BY-NC-SA 4.0");
+  assert.equal(result.source.api_url, "https://api.thedatadriver.app/v1/f1/races/2026/17/stints");
+  assert.ok(JSON.stringify(result).length <= MAX_RESULT_CHARS);
+  const all = await runner.call("f1_stints", { season: 2026, api_round: 17, limit: 22 });
+  assert.ok(JSON.stringify(all).length <= MAX_RESULT_CHARS);
+  assert.ok(all.truncated, "a result cut to fit the cap says so");
+  const one = await runner.call("f1_stints", { season: 2026, api_round: 17, driver_code: "dab" });
+  assert.deepEqual(one.data.drivers.map((driver) => driver.code), ["DAB"]);
+  assert.equal((await runner.call("f1_stints", { season: 2026, api_round: 17, limit: 40 })).ok, false);
+});
+
+test("catalogue: f1_positions summarises every driver and lists a bounded lap window", async () => {
+  const runner = runnerFor({ "/v1/f1/races/2026/17/positions": ok(positionsPayload, openf1Meta) });
+  const result = await runner.call("f1_positions", { season: 2026, api_round: 17 });
+  assert.equal(result.ok, true);
+  assert.equal(result.availability, "partial");
+  assert.equal(result.reason, "Lap 30 is missing for one driver.");
+  assert.equal(result.data.method, "Order of lap completion from OpenF1 /position");
+  assert.equal(result.data.drivers.length, 22);
+  const first = result.data.drivers[0];
+  assert.deepEqual(
+    { grid: first.grid, finish: first.finish, lap_1: first.lap_1, best: first.best_running, worst: first.worst_running, gained: first.places_gained, laps: first.laps_with_position },
+    { grid: 1, finish: 22, lap_1: 1, best: 1, worst: 22, gained: -21, laps: 57 },
+  );
+  assert.equal(first.laps, undefined);
+  assert.equal(result.source.kind, "openf1_enrichment");
+  assert.ok(JSON.stringify(result).length <= MAX_RESULT_CHARS);
+  // A lap window needs a driver; it is capped at 20 laps and keeps gaps as gaps.
+  const window = await runner.call("f1_positions", { season: 2026, api_round: 17, driver_code: "DAA", from_lap: 25, to_lap: 60 });
+  const laps = window.data.drivers[0].laps;
+  assert.equal(laps[0].lap, 25);
+  assert.equal(laps.at(-1).lap, 44);
+  assert.equal(laps.some((point) => point.lap === 30), false);
+  assert.equal(laps.length, 19);
+  const noDriver = await runner.call("f1_positions", { season: 2026, api_round: 17, from_lap: 0 });
+  assert.equal(noDriver.data.drivers[0].laps, undefined);
+});
+
+test("catalogue: f1_stints and f1_positions report a missing endpoint and an unpublished race", async () => {
+  const runner = runnerFor({
+    "/v1/f1/races/2026/18/positions": ok({ availability: "unavailable", reason: "OpenF1 has not published this session yet.", method: null, race_laps: null, drivers: [] }, openf1Meta),
+  });
+  const missing = await runner.call("f1_stints", { season: 2026, api_round: 18 });
+  assert.equal(missing.ok, false);
+  assert.equal(missing.error.status, 404);
+  assert.equal(missing.source.kind, "openf1_enrichment");
+  assert.equal(missing.source.licence, "CC BY-NC-SA 4.0");
+  const unpublished = await runner.call("f1_positions", { season: 2026, api_round: 18 });
+  assert.equal(unpublished.ok, true);
+  assert.equal(unpublished.availability, "unavailable");
+  assert.equal(unpublished.reason, "OpenF1 has not published this session yet.");
+  assert.deepEqual(unpublished.data.drivers, []);
 });
 
 test("catalogue: the browser fetcher calls only the same-origin proxy, with no credentials", async () => {

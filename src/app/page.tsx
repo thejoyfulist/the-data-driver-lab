@@ -84,7 +84,7 @@ async function fetchLabEndpoint<T>(endpoint: string): Promise<T | null> {
  * API paths the client views read; a failed fetch is left out and retried by
  * the browser. Season-wide views (championship progression = one request per
  * completed round, constructors, head-to-head) load in the browser on
- * demand, which keeps an ISR regeneration to 4 + 3 + at most 8 requests.
+ * demand, which keeps an ISR regeneration to 4 + 3 + at most 10 requests.
  */
 async function buildInitialSeed(
   season: number,
@@ -95,6 +95,8 @@ async function buildInitialSeed(
   const endpoints = [
     `/v1/f1/races/${season}/${round}/fastest-laps`,
     `/v1/f1/races/${season}/${round}/pitstops`,
+    `/v1/f1/races/${season}/${round}/stints`,
+    `/v1/f1/races/${season}/${round}/positions`,
     `/v1/f1/races/${season}/${round}/safety-cars`,
     `/v1/f1/races/${season}/${round}/incidents`,
     `/v1/f1/races/${season}/${round}/weather`,

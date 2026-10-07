@@ -11,7 +11,7 @@ test('the Next route serves MCP under the site CSP', async ({ request }) => {
   const client = new Client({ name: 'next-route-test', version: '1.0.0' });
   await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/api/mcp`)));
   try {
-    expect((await client.listTools()).tools).toHaveLength(21);
+    expect((await client.listTools()).tools).toHaveLength(23);
     const race = await client.callTool({ name: 'f1_resolve_race', arguments: { season: 2026, query: 'previous' } });
     expect(race.isError).toBeFalsy();
     const standings = await client.callTool({ name: 'f1_driver_standings', arguments: { season: 2026 } });

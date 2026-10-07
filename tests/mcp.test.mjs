@@ -17,11 +17,12 @@ async function connectedClient() {
   return client;
 }
 
-test('official SDK initializes and lists 19 read-only tools plus search/fetch', async () => {
+test('official SDK initializes and lists 21 read-only tools plus search/fetch', async () => {
   const client = await connectedClient();
   try {
     const tools = (await client.listTools()).tools;
-    assert.equal(tools.length, 21);
+    assert.equal(tools.length, F1_TOOLS.length + 2);
+    assert.equal(F1_TOOLS.length, 21);
     assert.deepEqual(tools.filter((tool) => tool.name.startsWith('f1_')).map((tool) => tool.name), F1_TOOLS.map((tool) => tool.name));
     for (const tool of tools) assert.equal(tool.annotations?.readOnlyHint, true);
     assert.equal(tools.find((tool) => tool.name === 'f1_race_results').inputSchema.type, 'object');

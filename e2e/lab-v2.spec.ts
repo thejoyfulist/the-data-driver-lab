@@ -13,6 +13,7 @@ const VIEWS = [
   ["pace", "Race pace"],
   ["fastest", "Fastest laps"],
   ["strategy", "Strategy"],
+  ["positions", "Positions"],
   ["timeline", "Race timeline"],
   ["sessions", "Sessions"],
   ["h2h", "Head-to-head"],
@@ -61,7 +62,7 @@ test("one view at a time: the URL carries it, Back restores it, deep links open 
 
   await showView(page, "Strategy");
   await expect(page).toHaveURL(/[?&]view=strategy\b/);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Pit stops and stints");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Tyre strategy");
 
   await page.goBack();
   await expect(page).toHaveURL(/[?&]view=pace\b/);
@@ -87,7 +88,7 @@ test("one view at a time: the URL carries it, Back restores it, deep links open 
   await expect(page.locator("#lab-fastest li", { hasText: "Hamilton" })).toContainText("1:31.340");
   // Links shared before the workspace (#anchor) still land on their view.
   await openLab(page, "/#lab-strategy");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Pit stops and stints");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Tyre strategy");
 });
 
 test("race report: key figures computed from the API, exact against the fixture", async ({ page }) => {
@@ -279,7 +280,7 @@ test("⌘K palette opens, filters and switches races and views; / opens the fiel
   await dialog.getByRole("combobox").fill("stints");
   await expect(dialog.getByRole("option").first()).toContainText("Strategy");
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { level: 1, name: "Pit stops and stints" })).toBeFocused();
+  await expect(page.getByRole("heading", { level: 1, name: "Tyre strategy" })).toBeFocused();
 
   await page.keyboard.press("[");
   await expect(page.locator("[data-race-picker]")).toContainText("R11 · Previous Fixture Grand Prix");
