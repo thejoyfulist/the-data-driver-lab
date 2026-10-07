@@ -149,7 +149,9 @@ export async function handleMcpRequest(request, options = {}) {
   const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Accept, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID', 'Access-Control-Expose-Headers': 'Mcp-Session-Id, Mcp-Protocol-Version', 'Cache-Control': 'no-store' };
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (request.method !== 'POST') return new Response(null, { status: 405, headers: { ...cors, Allow: 'POST, OPTIONS' } });
-  const forwarded = process.env.VERCEL ? (request.headers.get('x-vercel-forwarded-for') || request.headers.get('x-real-ip') || request.headers.get('x-forwarded-for')) : null;
+  // Proxy headers are trusted only behind Vercel, which overwrites them.
+  const trustProxyHeaders = options.trustProxyHeaders ?? Boolean(process.env.VERCEL);
+  const forwarded = trustProxyHeaders ? (request.headers.get('x-vercel-forwarded-for') || request.headers.get('x-real-ip') || request.headers.get('x-forwarded-for')) : null;
   const ip = forwarded?.split(',')[0]?.trim() || request.socket?.remoteAddress || request.ip || 'unknown';
   const rpcError = (status, code, message, headers = {}) => Response.json({ jsonrpc: '2.0', id: null, error: { code, message } }, { status, headers: { ...cors, ...headers } });
   if (!allowMcpRequest(ip)) return rpcError(429, -32000, 'Rate limit exceeded.', { 'Retry-After': '60' });
