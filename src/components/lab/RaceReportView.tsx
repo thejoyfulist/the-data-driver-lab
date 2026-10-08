@@ -206,7 +206,7 @@ export function RaceReportView({ context, race, isLatestCompleted, onSelectView,
       </header>
 
       {apiOpen && <ApiPanel title="Race report" endpoints={endpoints} exportRows={exportRows} exportName={exportBasename("race-report", context.season, context.roundSlug)} />}
-      {positions.data?.availability === "complete" && positions.data.post_race_adjustments?.length && positions.data.reason && (
+      {positions.data?.availability === "complete" && (positions.data.post_race_adjustments?.length ?? 0) > 0 && positions.data.reason && (
         <p className="mt-3 text-[13px] text-white/[0.70]" data-official-adjustments>{positions.data.reason}</p>
       )}
       <dl className="mt-3 grid grid-cols-2 gap-2 md:mt-5 md:gap-2.5 lg:grid-cols-4" aria-label="Key figures" data-key-figures>
