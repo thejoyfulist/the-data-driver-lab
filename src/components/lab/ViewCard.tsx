@@ -40,7 +40,7 @@ export interface ViewCardProps {
 }
 
 const quietButton =
-  "inline-flex min-h-11 lg:min-h-9 items-center gap-1.5 rounded-md border border-white/[0.10] px-3 text-[13px] text-white/[0.78] transition-colors duration-fast hover:border-white/[0.22] hover:text-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex min-h-11 lg:min-h-9 items-center gap-1.5 rounded-md border border-white/[0.10] px-3 text-[13px] text-white/[0.78] transition-colors duration-fast hover:border-white/[0.22] hover:text-light focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-teal/70 disabled:cursor-not-allowed disabled:opacity-50";
 
 export function ViewCard({
   id,
@@ -101,7 +101,7 @@ export function ViewCard({
                   type="button"
                   aria-pressed={mode === value}
                   onClick={() => setMode(value)}
-                  className={`min-h-10 rounded px-3 text-[13px] capitalize lg:min-h-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 ${mode === value ? "bg-teal text-dark" : "text-white/[0.72] hover:text-light"}`}
+                  className={`min-h-10 rounded px-3 text-[13px] capitalize lg:min-h-8 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-teal/70 ${mode === value ? "bg-teal text-dark" : "text-white/[0.72] hover:text-light"}`}
                 >
                   {value}
                 </button>
@@ -276,7 +276,7 @@ export function ViewMenu(props: ExportProps) {
               tabIndex={-1}
               aria-disabled={!item.enabled}
               onClick={() => run(item.action, item.enabled)}
-              className={`flex min-h-10 w-full items-center rounded-md px-3 text-left text-[14px] focus-visible:outline-none ${item.enabled ? "text-white/[0.84] hover:bg-white/[0.06] focus:bg-white/[0.08]" : "cursor-not-allowed text-white/[0.62]"}`}
+              className={`flex min-h-10 w-full items-center rounded-md px-3 text-left text-[14px] focus-visible:outline-hidden ${item.enabled ? "text-white/[0.84] hover:bg-white/[0.06] focus:bg-white/[0.08]" : "cursor-not-allowed text-white/[0.62]"}`}
             >
               {item.label}
             </button>

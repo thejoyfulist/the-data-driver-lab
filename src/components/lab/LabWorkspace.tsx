@@ -11,7 +11,7 @@ import { readableTeamColor, teamColor } from "@/lib/team-colors";
  * wide screens, scrolling pills on phones) and the phone action bar.
  */
 
-const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70";
+const focusRing = "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-teal/70";
 export const barButton = `inline-flex min-h-11 lg:min-h-10 items-center gap-2 rounded-lg border border-white/[0.10] px-3 text-[13px] text-white/[0.84] transition-colors hover:border-white/[0.22] hover:text-light ${focusRing}`;
 
 /** Disclosure popover: closes on Escape (focus back on the trigger) and on an outside click. */

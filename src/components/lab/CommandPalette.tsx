@@ -120,7 +120,7 @@ export function CommandPalette({ open, onClose, items }: CommandPaletteProps) {
               setActive(0);
             }}
             placeholder="Go to a view, race, driver or season…"
-            className="h-12 w-full bg-transparent text-body-sm text-light placeholder:text-white/[0.55] focus:outline-none"
+            className="h-12 w-full bg-transparent text-body-sm text-light placeholder:text-white/[0.55] focus:outline-hidden"
           />
         </div>
         <ul id={listId} role="listbox" aria-label="Commands" className="max-h-[50vh] overflow-y-auto py-2">

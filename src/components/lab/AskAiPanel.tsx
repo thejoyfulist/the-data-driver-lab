@@ -29,7 +29,7 @@ type RunState = "idle" | "running" | "done" | "error";
 const KEY_FORGOTTEN = "key-forgotten";
 
 const buttonClass =
-  "min-h-11 rounded-lg px-4 text-[14px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 disabled:cursor-not-allowed disabled:opacity-40";
+  "min-h-11 rounded-lg px-4 text-[14px] font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-teal/70 disabled:cursor-not-allowed disabled:opacity-40";
 
 /** One-line summary of a tool call's input ("season 2026 · api_round 17"). */
 function describeInput(input: unknown): string {

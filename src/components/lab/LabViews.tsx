@@ -143,7 +143,7 @@ export function PaceView({ context }: { context: LabViewContext }) {
           type="button"
           aria-pressed={filtered}
           onClick={() => setFiltered((value) => !value)}
-          className="inline-flex min-h-11 items-center rounded-md border border-white/[0.10] px-3 text-[13px] lg:min-h-9 text-white/[0.78] hover:border-white/[0.22] hover:text-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70"
+          className="inline-flex min-h-11 items-center rounded-md border border-white/[0.10] px-3 text-[13px] lg:min-h-9 text-white/[0.78] hover:border-white/[0.22] hover:text-light focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-teal/70"
         >
           {filtered ? "Show all laps" : "Hide slow laps"}
         </button>
@@ -429,7 +429,7 @@ export function StrategyGlanceCard({ context, onShowAll }: { context: LabViewCon
           )}
           <PartialNote text={tyres.partial} />
           {onShowAll && (
-            <button type="button" onClick={onShowAll} className="mt-3 inline-flex min-h-11 items-center text-[13px] lg:min-h-9 text-white/[0.78] underline-offset-4 hover:text-light hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70">
+            <button type="button" onClick={onShowAll} className="mt-3 inline-flex min-h-11 items-center text-[13px] lg:min-h-9 text-white/[0.78] underline-offset-4 hover:text-light hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-teal/70">
               Full strategy and legend →
             </button>
           )}
@@ -522,7 +522,7 @@ export function PositionsView({ context }: { context: LabViewContext }) {
                   aria-pressed={on}
                   onClick={() => toggle(driver.code)}
                   title={on ? `Stop highlighting ${driver.name}` : `Highlight ${driver.name}`}
-                  className={`inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 font-mono text-[12px] transition-colors hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 lg:min-h-8 ${on ? "bg-white/[0.06]" : ""}`}
+                  className={`inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 font-mono text-[12px] transition-colors hover:bg-white/[0.05] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-teal/70 lg:min-h-8 ${on ? "bg-white/[0.06]" : ""}`}
                   style={{ color: readableTeamColor(driver.team) }}
                 >
                   <svg width="18" height="8" viewBox="0 0 18 8" aria-hidden="true" className="shrink-0">
@@ -534,7 +534,7 @@ export function PositionsView({ context }: { context: LabViewContext }) {
               );
             })}
             {highlighted.size > 0 && (
-              <button type="button" onClick={() => setPicked(new Set())} className="inline-flex min-h-11 items-center rounded-md px-2 text-[13px] text-white/[0.70] underline-offset-4 hover:text-light hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 lg:min-h-8">
+              <button type="button" onClick={() => setPicked(new Set())} className="inline-flex min-h-11 items-center rounded-md px-2 text-[13px] text-white/[0.70] underline-offset-4 hover:text-light hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-teal/70 lg:min-h-8">
                 Show all equally
               </button>
             )}
@@ -620,7 +620,7 @@ export function FastestLapsView({ context, variant, limit, onShowAll }: { contex
         <>
           <TeamBars rows={limit ? rows.slice(0, limit) : rows} compact={variant === "card"} />
           {limit && rows.length > limit && onShowAll && (
-            <button type="button" onClick={onShowAll} className="mt-3 inline-flex min-h-11 items-center text-[13px] lg:min-h-9 text-white/[0.78] underline-offset-4 hover:text-light hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70">
+            <button type="button" onClick={onShowAll} className="mt-3 inline-flex min-h-11 items-center text-[13px] lg:min-h-9 text-white/[0.78] underline-offset-4 hover:text-light hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-teal/70">
               All {rows.length} drivers →
             </button>
           )}

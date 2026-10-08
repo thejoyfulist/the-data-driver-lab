@@ -121,7 +121,7 @@ export function LabInspector({ view, context, onAsk, shortcuts }: LabInspectorPr
           <p className="mt-2 text-[14px] leading-6 text-white/[0.70]" data-insights-refusal>{refusal}</p>
         )}
         <p className="mt-2 text-[12px] leading-5 text-white/[0.62]">Computed from the {labViewDef(view).label.toLowerCase()} rows by fixed rules; nothing here is generated.</p>
-        <button type="button" onClick={onAsk} className="mt-3 inline-flex min-h-11 items-center text-[14px] lg:min-h-9 text-light underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70">
+        <button type="button" onClick={onAsk} className="mt-3 inline-flex min-h-11 items-center text-[14px] lg:min-h-9 text-light underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-teal/70">
           Ask a question about this view →
         </button>
       </section>
@@ -132,7 +132,7 @@ export function LabInspector({ view, context, onAsk, shortcuts }: LabInspectorPr
           <ul className="mt-2 space-y-1.5">
             {shortcuts.map((shortcut) => (
               <li key={shortcut.id}>
-                <button type="button" onClick={shortcut.run} className="flex min-h-11 w-full items-center rounded-lg border lg:min-h-10 border-white/[0.08] px-3 text-left text-[14px] text-white/[0.78] hover:border-white/[0.18] hover:text-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70">
+                <button type="button" onClick={shortcut.run} className="flex min-h-11 w-full items-center rounded-lg border lg:min-h-10 border-white/[0.08] px-3 text-left text-[14px] text-white/[0.78] hover:border-white/[0.18] hover:text-light focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-teal/70">
                   {shortcut.label}
                 </button>
               </li>

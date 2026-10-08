@@ -114,7 +114,7 @@ function PositionsLine({ figure, onOpen }: { figure: ClimbFigure | "loading"; on
       ) : (
         <span className="min-w-0"><span className="text-ambre">Not available</span> · {figure.reason}</span>
       )}
-      <button type="button" onClick={onOpen} className="ml-auto inline-flex min-h-11 items-center text-[13px] text-white/[0.78] underline-offset-4 hover:text-light hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 lg:min-h-8">
+      <button type="button" onClick={onOpen} className="ml-auto inline-flex min-h-11 items-center text-[13px] text-white/[0.78] underline-offset-4 hover:text-light hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-teal/70 lg:min-h-8">
         Positions lap by lap →
       </button>
     </div>
@@ -250,7 +250,7 @@ export function RaceReportView({ context, race, isLatestCompleted, onSelectView,
                   display: String(row.points ?? ""),
                 }))}
               />
-              <button type="button" onClick={() => onSelectView("championship")} className="mt-3 inline-flex min-h-11 items-center text-[13px] lg:min-h-9 text-white/[0.78] underline-offset-4 hover:text-light hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70">
+              <button type="button" onClick={() => onSelectView("championship")} className="mt-3 inline-flex min-h-11 items-center text-[13px] lg:min-h-9 text-white/[0.78] underline-offset-4 hover:text-light hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-teal/70">
                 Full championship →
               </button>
             </>

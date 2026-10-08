@@ -189,7 +189,7 @@ export function LineChart({
     <div className="w-full" data-line-chart>
       <div
         ref={containerRef}
-        className="relative w-full rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/60"
+        className="relative w-full rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-teal/60"
         tabIndex={0}
         role="group"
         aria-label={`${ariaLabel}. Use the left and right arrow keys to read values.`}
@@ -298,7 +298,7 @@ export function LineChart({
               aria-pressed={shown}
               onClick={() => toggle(line.id)}
               title={shown ? `Hide ${line.name}` : `Show ${line.name}`}
-              className={`inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 lg:min-h-8 text-[13px] transition-colors hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 ${shown ? "text-white/[0.84]" : "text-white/[0.62] line-through"}`}
+              className={`inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 lg:min-h-8 text-[13px] transition-colors hover:bg-white/[0.05] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-teal/70 ${shown ? "text-white/[0.84]" : "text-white/[0.62] line-through"}`}
             >
               <LineSwatch color={shown ? line.color : "rgba(255,255,255,0.35)"} dashed={line.dashed} />
               {line.name}

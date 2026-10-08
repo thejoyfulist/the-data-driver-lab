@@ -1,6 +1,21 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../../tailwind.config.ts";
+
+/* The tyre chart starts with an absolute SVG. Restore v3 spacing there;
+   the v4 preceding-sibling rule otherwise loses the gap after that SVG. */
+@layer utilities {
+  [data-tyre-strategy].space-y-3 > :not(:last-child) { margin-block-end: 0; }
+  [data-tyre-strategy].space-y-3 > :not([hidden]) ~ :not([hidden]) { margin-block-start: 12px; }
+}
+
+/* Keep Tailwind 3's Preflight defaults where the site's classes rely on them. */
+@layer base {
+  *, ::after, ::before, ::backdrop, ::file-selector-button {
+    border-color: #e5e7eb;
+  }
+  input::placeholder, textarea::placeholder { color: #9ca3af; }
+  button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+}
 
 /* Motion is progressive enhancement. Framer Motion emits hidden inline styles
    for entrance animations during SSR; reveal them when JavaScript never runs.
@@ -98,6 +113,7 @@
 }
 
 /* ── Base reset ──────────────────────────────────────────────── */
+@layer base {
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
 html {
@@ -112,6 +128,7 @@ body {
   background-color: var(--surface-0);
   color: var(--color-light);
   line-height: 1.5;
+}
 }
 
 /* ── Live race intelligence stage ─────────── */
@@ -132,9 +149,11 @@ body {
 }
 
 /* Keyboard focus must remain visible against every dark surface. */
+@layer base {
 :focus-visible {
   outline: 2px solid var(--color-teal);
   outline-offset: 3px;
+}
 }
 
 /* ── Custom scrollbar — nearly invisible (SENNA directive) ──── */

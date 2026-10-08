@@ -82,7 +82,7 @@ export function TeamBars({ rows, lowerIsBetter = false, onToggle, toggleLabel, c
                 onClick={() => onToggle(row.id)}
                 aria-pressed={Boolean(row.selected)}
                 aria-label={toggleLabel?.(row)}
-                className={`flex w-full items-center gap-3 rounded-md px-1.5 py-1.5 text-left transition-colors duration-fast hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/70 ${row.selected ? "bg-white/[0.05] ring-1 ring-inset ring-white/[0.10]" : ""}`}
+                className={`flex w-full items-center gap-3 rounded-md px-1.5 py-1.5 text-left transition-colors duration-fast hover:bg-white/[0.04] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-teal/70 ${row.selected ? "bg-white/[0.05] ring-1 ring-inset ring-white/[0.10]" : ""}`}
                 style={row.selected ? { boxShadow: `inset 2px 0 0 ${row.color}` } : undefined}
               >
                 {content}

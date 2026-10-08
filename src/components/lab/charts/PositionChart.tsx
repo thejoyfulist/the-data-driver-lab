@@ -110,7 +110,7 @@ export function PositionChart({ drivers, maxLap, maxPosition, highlighted, adjus
     <div className="w-full" data-position-chart>
       <div
         ref={containerRef}
-        className="relative w-full rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/60"
+        className="relative w-full rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-teal/60"
         tabIndex={0}
         role="group"
         aria-label="Positions by lap. Use the left and right arrow keys to read the running order at a lap."

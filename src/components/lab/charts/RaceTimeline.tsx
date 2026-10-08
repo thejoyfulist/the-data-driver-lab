@@ -72,7 +72,7 @@ export function RaceTimeline({ raceLaps, bands, incidents, pitDensity, unavailab
           <span className="flex items-center text-[12px] text-white/[0.62]">Lap</span>
         </div>
         <div
-          className="relative grid touch-pan-y grid-rows-[28px_40px_24px_16px] gap-y-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/60"
+          className="relative grid touch-pan-y grid-rows-[28px_40px_24px_16px] gap-y-2 rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-teal/60"
           tabIndex={0}
           role="group"
           aria-label="Race timeline by lap. Use the left and right arrow keys to read a lap."
