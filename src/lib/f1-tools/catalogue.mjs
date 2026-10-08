@@ -418,7 +418,7 @@ export const F1_TOOLS = [
   {
     name: "f1_positions",
     title: "Positions lap by lap",
-    description: "Running order of a race: per driver grid, finish, position after lap 1, best and worst running position. places_gained and gain_from_grid mean grid minus finish; recovery_from_lowest_running_position means the lowest position held during the race (grid included) minus finish, and is null unless every race lap is published. These are different measures. Pass driver_code with from_lap/to_lap (at most 20 laps; lap 0 = grid) to list that driver's position on each lap. Missing laps are never interpolated. Non-official OpenF1 enrichment; finishing positions remain official.",
+    description: "Running order of a race: per driver grid, finish, position after lap 1, best and worst running position. places_gained and gain_from_grid mean grid minus finish; recovery_from_lowest_running_position means the lowest position held during the race (grid included) minus finish, and is null unless every race lap is published. These are different measures. Pass driver_code with from_lap/to_lap (at most 20 laps; lap 0 = grid) to list that driver's position on each lap. Missing laps are never interpolated. post_race_adjustments identifies documented official classification changes after the finish. Non-official OpenF1 enrichment; finishing positions remain official.",
     inputSchema: raceInput.extend({
       driver_code: z.string().regex(/^[A-Za-z]{3}$/).optional().describe("Three-letter driver code, e.g. NOR."),
       from_lap: z.number().int().min(0).max(100).optional().describe("First lap to list (0 = grid). Needs driver_code."),
@@ -435,6 +435,7 @@ export const F1_TOOLS = [
       const to = from == null ? null : Math.min(input.to_lap ?? from + 19, from + 19);
       return {
         method: text(data?.method),
+        post_race_adjustments: rowsOf(data?.post_race_adjustments).map((item) => ({ driver_code: text(item.driver_code), note: text(item.note), source: text(item.source) })),
         race_laps: data?.race_laps ?? null,
         drivers: rows.map((row) => {
           const points = rowsOf(row.positions).filter((point) => isNumber(point.lap) && isNumber(point.position));

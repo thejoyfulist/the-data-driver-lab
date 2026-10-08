@@ -304,6 +304,7 @@ test("catalogue: f1_positions summarises every driver and lists a bounded lap wi
   assert.equal(result.availability, "partial");
   assert.equal(result.reason, "Lap 30 is missing for one driver.");
   assert.equal(result.data.method, "Order of lap completion from OpenF1 /position");
+  assert.deepEqual(result.data.post_race_adjustments, []);
   assert.equal(result.data.drivers.length, 22);
   const first = result.data.drivers[0];
   assert.deepEqual(
@@ -318,6 +319,11 @@ test("catalogue: f1_positions summarises every driver and lists a bounded lap wi
   assert.match(F1_TOOLS.find((tool) => tool.name === "f1_positions").description, /lowest position held during the race/);
   assert.equal(result.source.kind, "openf1_enrichment");
   assert.ok(JSON.stringify(result).length <= MAX_RESULT_CHARS);
+  const adjusted = await runnerFor({ "/v1/f1/races/2026/17/positions": ok({
+    ...positionsPayload,
+    post_race_adjustments: [{ driver_code: "DAA", note: "Driver received a five-second time penalty.", source: "formula1.com" }],
+  }, openf1Meta) }).call("f1_positions", { season: 2026, api_round: 17 });
+  assert.equal(adjusted.data.post_race_adjustments[0].driver_code, "DAA");
   // A lap window needs a driver; it is capped at 20 laps and keeps gaps as gaps.
   const window = await runner.call("f1_positions", { season: 2026, api_round: 17, driver_code: "DAA", from_lap: 25, to_lap: 60 });
   const laps = window.data.drivers[0].laps;

@@ -35,6 +35,7 @@ export interface LabStintsPayload {
 export interface LabPositionsPayload {
   availability?: "complete" | "partial" | "unavailable" | string | null;
   reason?: string | null;
+  post_race_adjustments?: { driver_code?: string | null; note?: string | null; source?: string | null }[] | null;
   method?: string | null;
   race_laps?: number | null;
   drivers?: {

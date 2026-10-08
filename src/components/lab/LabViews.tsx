@@ -450,6 +450,8 @@ export function PositionsView({ context }: { context: LabViewContext }) {
   const [, setLapCursor] = useChartCursor("lap");
   const [picked, setPicked] = useState<ReadonlySet<string> | null>(null);
   const series = useMemo(() => buildPositionSeries(positions.data, context.results), [positions.data, context.results]);
+  const adjustments = positions.data?.availability === "complete" ? positions.data.post_race_adjustments ?? [] : [];
+  const adjustedCodes = new Set(adjustments.flatMap((item) => item.driver_code ? [item.driver_code] : []));
   const state = enrichmentState(positions, "Lap-by-lap positions", "/positions", series.drivers.length > 0);
   const drivers = dashTeammates(series.drivers);
   const codes = new Set(series.drivers.map((driver) => driver.code));
@@ -506,7 +508,10 @@ export function PositionsView({ context }: { context: LabViewContext }) {
         </div>
       ) : (
         <>
-          <PositionChart drivers={drivers} maxLap={series.maxLap} maxPosition={series.maxPosition} highlighted={highlighted} bands={bands} syncGroup="lap" />
+          <PositionChart drivers={drivers} maxLap={series.maxLap} maxPosition={series.maxPosition} highlighted={highlighted} adjustedCodes={adjustedCodes} bands={bands} syncGroup="lap" />
+          {adjustments.length > 0 && positions.data?.reason && (
+            <p className="mt-3 text-[13px] text-white/[0.70]" data-official-adjustments>{positions.data.reason}</p>
+          )}
           <div className="mt-2 flex flex-wrap items-center gap-1" role="group" aria-label="Highlight drivers" data-position-legend>
             {drivers.map((driver) => {
               const on = highlighted.has(driver.code);

@@ -13,6 +13,7 @@ interface PositionChartProps {
   maxPosition: number;
   /** Driver codes drawn in full; every other line is dimmed. Empty: all drawn alike. */
   highlighted: ReadonlySet<string>;
+  adjustedCodes?: ReadonlySet<string>;
   bands?: readonly NeutralisationBand[];
   /** Shares the lap cursor with the race timeline strip (and the other lap charts). */
   syncGroup?: string;
@@ -43,7 +44,7 @@ export function formatPositionLap(lap: number): string {
  * are drawn in full, the others dimmed. A lap without a published position
  * breaks the line: nothing is interpolated.
  */
-export function PositionChart({ drivers, maxLap, maxPosition, highlighted, bands = [], syncGroup }: PositionChartProps) {
+export function PositionChart({ drivers, maxLap, maxPosition, highlighted, adjustedCodes = new Set(), bands = [], syncGroup }: PositionChartProps) {
   const [containerRef, width] = useElementWidth<HTMLDivElement>();
   const [cursor, setCursor] = useChartCursor(syncGroup);
   const rows = Math.max(maxPosition, 2);
@@ -165,6 +166,11 @@ export function PositionChart({ drivers, maxLap, maxPosition, highlighted, bands
               {lonely.map((point) => (
                 <circle key={point.lap} cx={x(point.lap)} cy={y(point.position)} r={2.5} fill={teamColor(driver.team)} fillOpacity={on ? 1 : 0.3} />
               ))}
+              {adjustedCodes.has(driver.code) && driver.points.length > 0 && (
+                <circle cx={x(driver.points.at(-1)!.lap)} cy={y(driver.points.at(-1)!.position)} r={4.5} fill="#080A0D" stroke="#D4A72D" strokeWidth={1.5} data-adjusted-finish={driver.code}>
+                  <title>{driver.code}: official classification changed after the finish</title>
+                </circle>
+              )}
             </g>
           ))}
           {lap != null && order.filter((entry) => isOn(entry.driver)).map(({ driver, position }) => (
