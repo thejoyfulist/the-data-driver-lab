@@ -5,6 +5,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Preserve the Tailwind 3 palette used before the v4 migration.
+        amber: { 400: "#fbbf24" },
+        red: { 400: "#f87171", 500: "#ef4444" },
+        zinc: {
+          100: "#f4f4f5",
+          200: "#e4e4e7",
+          300: "#d4d4d8",
+          400: "#a1a1aa",
+          500: "#71717a",
+          600: "#52525b",
+        },
         dark: "#080A0D",
         light: "#F3F6FA",
         rouge: {
