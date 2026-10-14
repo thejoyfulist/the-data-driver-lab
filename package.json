@@ -24,12 +24,12 @@
     "@ai-sdk/anthropic": "^4.0.78",
     "@ai-sdk/openai-compatible": "^3.0.67",
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "ai": "^7.0.135",
+    "ai": "^7.0.137",
     "framer-motion": "^12.36.0",
     "next": "16.4.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",
