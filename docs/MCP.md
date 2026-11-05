@@ -31,6 +31,23 @@ For a Desktop configuration, point a stdio MCP server at Node with this reposito
 claude mcp add the-data-driver -- node /absolute/path/to/the-data-driver-lab/scripts/mcp-stdio.mjs
 ```
 
+### Claude Desktop
+
+For Claude Desktop with a local checkout, add a stdio server in `claude_desktop_config.json`. Config file locations for macOS and Windows are in the [MCP quickstart for Claude Desktop](https://modelcontextprotocol.io/quickstart/user) (do not hard-code paths that may change). Example `mcpServers` entry after `npm install` (replace the path with your clone):
+
+```json
+{
+  "mcpServers": {
+    "the-data-driver": {
+      "command": "node",
+      "args": ["/absolute/path/to/the-data-driver-lab/scripts/mcp-stdio.mjs"]
+    }
+  }
+}
+```
+
+Restart Claude Desktop after saving the file.
+
 ## ChatGPT
 
 In ChatGPT, enable **Developer mode**, then open **Settings → Apps → Create** (or **Workspace settings → Apps → Create**, depending on your permissions). Enter the hosted URL, choose no authentication, scan tools, and create the app. Workspace admins may need to enable developer mode first. See [OpenAI’s current setup guide](https://help.openai.com/en/articles/12584461-developer-mode-and-full-mcp-connectors-in-chatgpt). The `search` and `fetch` tools return ChatGPT’s documented structured result format and source URLs. Availability depends on your plan and workspace settings.
